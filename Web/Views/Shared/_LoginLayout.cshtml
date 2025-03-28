@@ -1,0 +1,74 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Web</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/Web.styles.css" asp-append-version="true" />
+    <!-- CSS trực tiếp -->
+    <style>
+        html
+        Copy
+        <style >
+        * {
+            box-sizing: border-box; /* Đảm bảo padding và border được tính vào chiều rộng và chiều cao */
+        }
+
+        html, body {
+            height: 100%;
+            margin: 0; /* Loại bỏ margin mặc định */
+            overflow-x: hidden; /* Ẩn cuộn ngang */
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container {
+            flex: 1; /* Chiếm không gian còn lại, đẩy footer xuống dưới cùng */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 400px; /* Giới hạn chiều rộng tối đa của card */
+            margin: 0 auto; /* Căn giữa card */
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+        }
+
+        footer {
+            /* Thêm một số padding để footer không chạm vào đáy */
+            padding: 20px 0;
+        }
+    </style>
+</head>
+<body class="d-flex flex-column min-vh-100">
+    <!-- Main Content -->
+    <div class="container flex-grow-1 d-flex justify-content-center align-items-center">
+        <main role="main" class="pb-3 w-100">
+            @RenderBody()
+        </main>
+    </div>
+
+    <!-- Footer -->
+    <footer class="border-top footer text-muted mt-4">
+        <div class="container text-center">
+            &copy; 2025 - Web - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+        </div>
+    </footer>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

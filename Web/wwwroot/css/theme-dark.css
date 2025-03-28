@@ -1,0 +1,379 @@
+﻿/*
+// *************************************************************************************
+// Program Name :
+// Creator	    : duy hung
+// Description	:
+// -------------------------------------------------------------------------------------
+// Date		    | Updater	| Modify Desc
+// -------------------------------------------------------------------------------------
+//
+// *************************************************************************************
+*/
+
+:root {
+    --dark-blur: rgba(38, 44, 73, 0.85);
+    --dark-colordark: #262c49;
+    --dark-colordarker: #10163a;
+    --dark-colorgrey: #c2c6dc;
+    --dark-codehelp: #003473;
+    --dark-colormute: #70657b; /*#70657b;#BD93F9,#A4A4A4*/
+    --dark-purpledark: #35214E;
+    --dark-purpledarker: #171842; /*#171842*/
+    --dark-purpletoday: rgba(102, 51, 153, 0.28);
+    --dark-primary: #663399;
+    --dark-danger: #C63B3D;
+}
+
+/* *************************************************************************************
+Main UI
+ **************************************************************************************/
+.dark-theme .main-content-wrap {
+    background-color: var(--dark-colordark);
+}
+
+.dark-theme .loadscreen {
+    background: var(--dark-blur);
+}
+
+.dark-theme .bg-dark {
+    background: var(--dark-colordark);
+}
+
+.dark-theme .bg-darker {
+    background: var(--dark-colordarker);
+}
+
+.dark-theme .Ul_li--hover::before {
+    background-color: var(--dark-colorgrey);
+}
+/*.dark-theme .layout-sidebar-large .main-header .menu-toggle div {
+    background: #c2c6dc;
+}*/
+/* *************************************************************************************
+table
+ **************************************************************************************/
+.dark-theme .table {
+    background-color: var(--dark-colordarker);
+}
+
+.dark-theme table tbody {
+    background: var(--dark-colordarker);
+}
+
+.dark-theme td.border-left-right {
+    border-color: var(--dark-colordark) !important;
+}
+
+.dark-theme .table-bordered {
+    border: 1px solid var(--dark-colordarker);
+    background: var(--dark-colordarker);
+}
+
+.dark-theme .table thead th {
+    border-bottom: 2px solid var(--dark-colordark);
+    border-left: 1px solid var(--dark-purpledarker);
+    border-right: 1px solid var(--dark-purpledarker);
+    border-top: 1px solid var(--dark-colordarker);
+}
+
+.dark-theme .table td {
+    border-left: 1px solid var(--dark-colordark);
+    border-right: 1px solid var(--dark-colordark);
+}
+
+.dark-theme .table-borderless thead th {
+    border-bottom: 1px solid var(--dark-colordark);
+    border-left: 1px solid transparent;
+    border-right: 1px solid transparent;
+}
+
+.dark-theme .table-borderless td {
+    border-left: 1px solid transparent;
+    border-right: 1px solid transparent;
+}
+
+.dark-theme .table-hover tr:hover {
+    background: var(--dark-colordark) !important;
+}
+
+.dark-theme table .border-top {
+    border-top: 1px solid var(--dark-colordarker) !important;
+}
+
+.dark-theme .nav-tabs .nav-item .nav-link.active {
+    border-bottom: 1px solid var(--dark-colordarker);
+}
+
+.dark-theme table tbody tr td.alert-primary,
+.dark-theme table tbody tr td.alert-success,
+.dark-theme table tbody tr td.alert-info,
+.dark-theme table tbody tr td.alert-warning {
+    opacity: 0.8;
+}
+
+.dark-theme .table-danger, .table-danger > th, .dark-theme .table-danger > td {
+    background-color: var(--dark-danger);
+}
+
+/* *************************************************************************************
+Control UI
+ **************************************************************************************/
+.dark-theme input {
+    background: var(--dark-colordark) !important;
+    border-color: var(--dark-primary);
+    color: var(--dark-colorgrey) !important;
+}
+
+.dark-theme label, .dark-theme a {
+    color: var(--dark-colorgrey);
+}
+
+/*.dark-theme a[href] {
+        color: var(--dark-colormute) !important;
+    }*/
+
+.dark-theme h1, .dark-theme h2, .dark-theme h3, .dark-theme h4, .dark-theme h5, .dark-theme h6, .dark-theme .card-title, .dark-theme .text-title {
+    color: var(--dark-colorgrey);
+}
+
+.dark-theme .form-control {
+    color: var(--dark-colorgrey) !important;
+}
+
+.dark-theme select {
+    background: var(--dark-colordark) !important;
+    border-color: var(--dark-primary);
+    color: var(--dark-colorgrey) !important;
+}
+
+.dark-theme .btn-secondary {
+    color: var(--dark-colorgrey) !important;
+    background: var(--dark-colordark) !important;
+    border-color: var(--dark-colordark);
+}
+
+.dark-theme .btn-outline-primary {
+    color: var(--dark-colorgrey) !important;
+    /*background: var(--dark-primary) !important;*/
+    border-color: var(--dark-primary);
+}
+
+.dark-theme .custom-separator {
+    border-color: var(--dark-colordark);
+}
+
+.dark-theme .border-bottom {
+    border-color: var(--dark-colordarker) !important;
+}
+
+.dark-theme .bootstrap-table .fixed-table-toolbar .bs-bars,
+.dark-theme .bootstrap-table .fixed-table-toolbar .columns,
+.dark-theme .bootstrap-table .fixed-table-toolbar .search input {
+    border-color: var(--dark-primary) !important;
+}
+
+.dark-theme .dropzone {
+    background: var(--dark-colordark) !important;
+}
+
+    .dark-theme .dropzone .dz-preview.dz-image-preview {
+        background: var(--dark-colordark) !important;
+    }
+
+/* *************************************************************************************
+Custom UI
+ **************************************************************************************/
+.dark-theme .codehelp {
+    background: var(--dark-codehelp) !important;
+    /*border-bottom: 2px solid var(--dark-colordark) !important;*/
+}
+
+.dark-theme .picker {
+    background: var(--dark-colordarker) !important;
+    border-color: var(--dark-colordark);
+}
+
+.dark-theme .picker__input {
+    color: var(--dark-colorgrey) !important;
+    border-color: var(--dark-primary);
+}
+
+.dark-theme .picker__holder {
+    background: var(--dark-colordark) !important;
+    border: 1px solid var(--dark-colormute);
+}
+
+.dark-theme .picker__weekday {
+    color: var(--dark-colorgrey) !important;
+}
+
+.dark-theme .picker__day--today {
+    background: var(--dark-purpletoday);
+    border-radius: 3px;
+}
+
+.dark-theme .picker__button--today {
+    background: var(--dark-purpletoday);
+    border-radius: 3px;
+}
+
+.dark-theme .picker__nav--prev:hover, .dark-theme .picker__nav--next:hover, .dark-theme .picker__footer button:hover, .dark-theme .picker__footer button:focus {
+    background: var(--dark-primary);
+}
+
+.dark-theme .picker__list, dark-theme .picker__list-item {
+    background: var(--dark-colordarker) !important;
+    border-color: var(--dark-colordark);
+    color: var(--dark-colorgrey) !important;
+}
+
+.dark-theme .picker__day--outfocus {
+    opacity: 0.3;
+    color: var(--dark-colormute) !important;
+}
+
+.dark-theme .picker__day--infocus {
+    color: var(--dark-colorgrey);
+}
+
+    .dark-theme .picker__day--infocus:hover {
+        background: var(--dark-primary);
+    }
+
+.dark-theme .picker__day--selected {
+    background: var(--dark-primary);
+}
+
+.dark-theme .picker__list-item:hover, .dark-theme .picker__list-item:focus {
+    background-color: var(--dark-blur);
+}
+
+.dark-theme ul.gj-list-md li [data-role=display] {
+    color: var(--dark-colorgrey);
+}
+
+.dark-theme .gj-list-md-active {
+    background: var(--dark-purpledark) !important;
+}
+
+.dark-theme th.fc-day-header {
+    background: var(--dark-purpledark) !important;
+    color: var(--dark-colorgrey);
+}
+
+.dark-theme .fc-today {
+    background: var(--dark-purpletoday) !important;
+    color: var(--dark-colorgrey);
+    font-weight: 600;
+}
+
+.dark-theme .fc td, .dark-theme .fc th {
+    border-color: var(--dark-blur);
+}
+
+.dark-theme .fc-view-container .table-bordered thead th, .dark-theme .fc-view-container .table-bordered thead td {
+    border-bottom-width: 0px;
+}
+
+.dark-theme .fc-body .table-bordered, .dark-theme .fc-head .table-bordered {
+    border-width: 0px;
+}
+
+/* *************************************************************************************
+Card, UI
+ **************************************************************************************/
+.dark-theme .layout-sidebar-large .sidebar-left .navigation-left .nav-item .nav-item-hold {
+    color: var(--dark-colorgrey) !important;
+    border-bottom: 1px solid var(--dark-colordark) !important;
+}
+
+.dark-theme .sidebar-container .sidebar-content {
+    background: var(--dark-colordarker);
+}
+
+.dark-theme .layout-sidebar-large .sidebar-left .navigation-left .nav-item .active {
+    background: var(--dark-purpledarker);
+}
+
+.dark-theme .sidebar-left-secondary .childNav li.nav-item.open > a {
+    background: var(--dark-purpledark);
+}
+
+.dark-theme .sidebar-left-secondary {
+    color: var(--dark-colorgrey) !important;
+}
+
+.dark-theme .modal-content {
+    background: var(--dark-colordarker);
+    border-color: var(--dark-purpledark);
+}
+
+.dark-theme .modal-header {
+    border-bottom: 1px solid var(--dark-colordark) !important;
+}
+
+.dark-theme .modal-body {
+    color: var(--dark-colorgrey) !important;
+}
+
+.dark-theme .modal-footer {
+    border-top: 1px solid var(--dark-colordark) !important;
+}
+
+.dark-theme .close {
+    color: var(--dark-colorgrey) !important;
+    text-shadow: 0 1px 0 var(--dark-colorgrey) !important;
+}
+
+.dark-theme .inbox-main-sidebar-container .inbox-main-sidebar .inbox-main-nav li a.active {
+    background: var(--dark-primary);
+}
+
+.dark-theme .ul-widget-nav-tabs-line .nav-item .nav-link.active {
+    border: 0px solid transparent !important;
+}
+
+/* *************************************************************************************
+UI Sites
+ **************************************************************************************/
+.dark-theme .app-pageopened .card-header {
+    background: var(--dark-primary);
+}
+
+.dark-theme .app-pageopened .nav-item {
+    border-bottom: 1px solid var(--dark-colordark) !important;
+}
+
+    .dark-theme .app-pageopened .nav-item:hover {
+        background: var(--dark-blur);
+    }
+
+.dark-theme .customizer .customizer-body {
+    background: var(--dark-colordarker);
+}
+
+.dark-theme .app-megamenu .dropdown-menu,
+.dark-theme .app-profilemenu .dropdown-menu,
+.dark-theme .app-gridmenu .dropdown-menu,
+.dark-theme .app-setlang .dropdown-menu,
+.dark-theme .app-component-pagination .dropdown-menu {
+    color: var(--dark-colorgrey);
+    background-color: var(--dark-colordarker);
+    border-color: var(--dark-colordark);
+}
+
+    .dark-theme .app-megamenu .dropdown-menu ul.links li:hover, .dark-theme .app-profilemenu .menu-profile a:hover {
+        background: var(--dark-blur);
+        cursor: pointer;
+    }
+
+    .dark-theme .app-megamenu .dropdown-menu .menu-icon-grid > a:hover {
+        background: var(--dark-blur);
+    }
+
+.dark-theme .app-gridmenu .menu-icon-grid > a:hover,
+.dark-theme .app-gridmenu .menu-icon-grid > a:hover,
+.dark-theme .app-setlang .dropdown-item:hover,
+.dark-theme .app-component-pagination .dropdown-item:hover {
+    background: var(--dark-blur);
+}

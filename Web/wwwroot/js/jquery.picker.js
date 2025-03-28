@@ -1,0 +1,10 @@
+﻿//for pick-a-date picker
+//document.write('<link rel="stylesheet" href="/Content/libs/pickadate/classic.css"\/>');
+//document.write('<link rel="stylesheet" href="/Content/libs/pickadate/classic.date.css"\/>');
+//document.write('<link rel="stylesheet" href="/Content/libs/pickadate/classic.time.css"\/>');
+//document.write('<link rel="stylesheet" href="/css/picker/pickadate.css"\/>');
+document.write('<script type="text/javascript" src="/Content/libs/pickadate/picker.js"><\/script>');
+document.write('<script type="text/javascript" src="/Content/libs/pickadate/picker.date.js"><\/script>');
+document.write('<script type="text/javascript" src="/Content/libs/pickadate/picker.time.js"><\/script>');
+document.write('<script type="text/javascript" src="/Content/libs/pickadate/legacy.js"><\/script>');
+//document.write('<script type="text/javascript" src="/Content/libs/pickadate/translations/vi-VN.js"><\/script>');

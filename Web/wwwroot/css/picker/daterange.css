@@ -1,0 +1,15 @@
+.daterangepicker td.active, .daterangepicker td.active:hover {
+    background-color: #735FC0;
+    border-color: transparent;
+    color: #fff;
+}
+
+.daterangepicker td.in-range {
+    background-color: #E9E2F1;
+}
+
+.daterangepicker td.active, .daterangepicker td.active:hover {
+    background-color: #735FC0;
+    border-color: transparent;
+    color: #fff;
+}

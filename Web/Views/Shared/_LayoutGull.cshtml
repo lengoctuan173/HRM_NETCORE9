@@ -1,0 +1,226 @@
+﻿@{
+    var isDark = Context.Request.Cookies["darktheme"];
+    var isCompact = (Context.Request.Cookies["compact"] ?? "0") == "1";
+}
+<!DOCTYPE html>
+<html class="loading" lang="en" data-textdirection="ltr">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0, minimal-ui">
+    <meta name="description" content="">
+    <meta name="keywords" content="">
+    <meta name="author" content="">
+    <title>@(String.IsNullOrWhiteSpace(ViewData["Title"]?.ToString()) ? "KSEMS" : ViewData["Title"])</title>
+    <!-- ////////////////////////////////////////////////////////////////////////////-->
+    <link rel="stylesheet" href="~/Content/fonts/fonts.css" />
+    <link rel="stylesheet" href="~/css/theme.css" asp-append-version="true" />
+    <link rel=" stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/Web.styles.css" asp-append-version="true" />
+    <link rel=" stylesheet" href="~/css/style.css" asp-append-version="true" />
+    <link rel=" stylesheet" href="~/css/theme-dark.css" asp-append-version="true" />
+
+    <style type="text/css">
+        #selectedlang {
+            width: 32px;
+        }
+
+        .dark-theme .layout-sidebar-large .main-header .menu-toggle div {
+            background-color: #c2c6dc !important
+        }
+
+        .dark-theme i.header-icon {
+            color: #c2c6dc !important
+        }
+
+        .layout-sidebar-large .main-header .logo img, .search-ui .search-header .logo {
+            height: 36px;
+            width: 36px;
+        }
+
+        .layout-sidebar-large .main-header .search-bar input {
+            background-color: transparent !important;
+        }
+
+        .app-footer .footer-bottom .logo {
+            width: 2rem;
+            height: 2rem;
+        }
+
+        .app-pageopened .nav-item:hover {
+            background: #ECECEC;
+        }
+
+        .app-pageopened .nav-item {
+            display: flex;
+            border-bottom: 1px solid #eee;
+            padding: 1rem;
+            cursor: pointer;
+        }
+
+        .app-pageopened i.nav-icon {
+            font-size: 18px;
+            margin-right: 8px;
+        }
+
+        .app-gridmenu .app-gridmenu-body, .app-setlang .app-setlang-body {
+            min-width: 220px;
+            float: right;
+            position: absolute;
+            will-change: transform;
+            top: 0px;
+            left: 0px;
+            transform: translate3d(-4px, 36px, 0px);
+        }
+
+        .app-gridmenu .menu-icon-grid > a:hover, .app-megamenu .menu-icon-grid > a:hover {
+            background-color: #639 !important
+        }
+
+        .center-message {
+            position: absolute;
+            top: 50%;
+            left: 40%;
+            transform: translate(0, -50%);
+            padding: 10px;
+            width: 380px;
+            text-align: center;
+        }
+
+        .app-searchmenu .card-icon-bg .card-body .content {
+            margin: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            max-width: 250px;
+        }
+    </style>
+
+    @RenderSection("Styles", required: false)
+</head>
+
+<body class="text-left @(isDark == "1" ? "dark-theme" : "")">
+    <!-- Pre Loader Start  -->
+    <div class='loadscreen' id="preloader">
+        <div class="loader spinner-bubble spinner-bubble-primary">
+        </div>
+        <div class="center-message text-primary text-14 font-weight-bold" id="msgloader">
+        </div>
+    </div>
+    <!-- Pre Loader end  -->
+
+@*     <input type="hidden" value="@CultureInfo.CurrentCulture" id="_currentCulture" /> *@
+    <div class="app-admin-wrap layout-sidebar-large clearfix">
+        <div class="main-header">
+            <div class="logo">
+                <a href="/Home/Index">
+                    <img src="~/Content/images/logo/logo.png" alt="" />
+                </a>
+            </div>
+            <div class="menu-toggle">
+                <div></div>
+                <div></div>
+                <div></div>
+            </div>
+
+            <div class="d-flex align-items-center">
+                <!-- Mega menu -->
+                <div class="dropdown mega-menu d-none d-md-block app-megamenu">
+                    <a href="#" class="btn text-muted dropdown-toggle mr-3" id="appMegaMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                       @*  @_Localizer.GetLocalized("MegaMenu")  *@MegaMenu
+                    </a>
+                    <div class="dropdown-menu text-left app-megamenu-body" aria-labelledby="appMegaMenuButton">
+                 @*        @await Html.PartialAsync("_MegaMenu") *@
+                    </div>
+                </div>
+                <!-- / Mega menu -->
+
+                <div class="search-bar app-searchmenu">
+                    <input type="text" placeholder="Search" class="app-searchmenu-button">
+                    <i class="search-icon text-muted i-Magnifi-Glass1"></i>
+                </div>
+            </div>
+
+            <div style="margin: auto"></div>
+
+            <div class="header-part-right">
+                <!-- Language select -->
+                <div class="app-setlang">
+                  @*   @await Html.PartialAsync("_SetLanguage") *@
+                </div>
+
+                <!-- Full screen toggle -->
+                <i class="i-Full-Screen header-icon d-none d-sm-inline-block" data-fullscreen></i>
+
+                <!-- Grid menu Dropdown -->
+                <div class="app-gridmenu">
+                   @*  @await Html.PartialAsync("_GridMenu") *@
+                </div>
+
+                <!-- Notificaiton -->
+                <div class="app-notificationarea">
+                   @*  @await Html.PartialAsync("_NotificaitonArea") *@
+                </div>
+
+                <!-- Dark mode -->
+                <i class="i-Half-Moon header-icon d-none d-sm-inline-block @(isDark == "1" ? "bg-primary text-muted" : "")" toogle-dark></i>
+
+                <!-- User avatar dropdown -->
+                <div class="app-profilemenu">
+                  @*   @await Html.PartialAsync("_ProfileMenu") *@
+                </div>
+            </div>
+        </div>
+
+        <div class="side-content-wrap app-sidemenu app-menu">
+      @*       @await Html.PartialAsync("_SideMenu") *@
+            <div class="sidebar-overlay"></div>
+        </div>
+        <!--=============== Left side End ================-->
+        <!-- ============ Body content start ============= -->
+        <div class="main-content-wrap d-flex flex-column @(isCompact ? "" : "sidenav-open")" id="renderbody">
+            @RenderBody()
+
+            <!-- Footer Start -->
+            <div class="flex-grow-1"></div>
+            <div class="app-footer">
+              @*   @await Html.PartialAsync("_AppFooter") *@
+            </div>
+            <!-- fotter end -->
+        </div>
+        <!-- ============ Body content End ============= -->
+    </div>
+
+    <!-- ============ Search UI Start ============= -->
+    <div class="search-ui app-searchmenu">
+      @*   @await Html.PartialAsync("_SearchMenu") *@
+    </div>
+    <!-- ============ Search UI End ============= -->
+    <!-- ============ Customizer Page Opened ============= -->
+    <div class="customizer app-pageopened">
+       @*  @await Html.PartialAsync("_PageOpened") *@
+    </div>
+    <!-- ============ End Customizer Page Opened ============= -->
+    <!-- ////////////////////////////////////////////////////////////////////////////-->
+    <script src="~/js/theme.js"></script>
+    <script src="~/Content/theme/gull/sidebar.large.script.js"></script>
+    <script src="~/Content/theme/gull/customizer.script.js"></script>
+    <script src="~/Content/libs/moment/moment.min.js"></script>
+    <script src="~/js/jquery.datatables.js"></script>
+    <script src="~/js/jquery.picker.js"></script>
+    <script src="~/js/core/ks.ems.common.js" asp-append-version="true"></script>
+    <script src="~/js/core/ks.ems.message.js" asp-append-version="true"></script>
+    <script src="~/js/core/ks.ems.dialog.js" asp-append-version="true"></script>
+    <script src="~/js/core/ks.ems.site.js" asp-append-version="true"></script>
+    <script src="~/js/core/ks.ems.input.validate.js" asp-append-version="true"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    <script src="~/js/main.js" asp-append-version="true" ></script>
+    <!-- ////////////////////////////////////////////////////////////////////////////-->
+    <script src="~/Scripts/main.js" asp-append-version="true"></script>
+@*  <script>
+        $kspage.checkPageOpened();
+    </script>
+ *@
+    @RenderSection("Scripts", required: false)
+</body>
+</html>
