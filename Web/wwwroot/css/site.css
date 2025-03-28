@@ -1,31 +1,268 @@
-html {
-  font-size: 14px;
+﻿
+html body {
+    background: #fff;
 }
 
-@media (min-width: 768px) {
-  html {
-    font-size: 16px;
-  }
+.table td {
+    vertical-align: middle;
+    font-size: 0.79rem;
 }
 
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+.Ul_li--hover {
+    text-transform: capitalize;
+    display: flex;
+    align-items: center;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 12px 2px 12px 24px;
+    transition: 0.15s all ease-in;
 }
 
-html {
-  position: relative;
-  min-height: 100%;
+    .Ul_li--hover i {
+        font-size: 18px;
+        margin-right: 8px;
+    }
+
+    .Ul_li--hover::before {
+        height: 46px;
+    }
+
+.sidebar-left-secondary .childNav li.nav-item .submenu > li a {
+    padding: 0px 12px !important;
 }
 
-body {
-  margin-bottom: 60px;
+.layout-sidebar-large .sidebar-left-secondary .childNav li.nav-item a:hover {
+    background-color: transparent !important;
 }
 
-.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
-  color: var(--bs-secondary-color);
-  text-align: end;
+.hidden, .hide {
+    display: none;
 }
 
-.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
-  text-align: start;
+.text-larger .form-group label {
+    font-size: 13px !important;
+}
+
+.Navigation-sidebar li:not(:first-child) {
+    margin: 1rem 0;
+}
+
+.Navigation-sidebar li a.active:hover, .Navigation-sidebar li a.active, .Navigation-sidebar li span.active:hover {
+    color: #0853b8;
+}
+
+/*.breadcrumb {
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid #ccc;
+    border-radius: 0;
+}*/
+
+.accordion .ul-collapse__right-icon a.collapsed:before {
+    content: "\e641";
+}
+
+.accordion .ul-collapse__right-icon a:before {
+    content: "\e669";
+}
+
+/*.badge {
+    font-weight: 500;
+    font-size: 11px;
+}*/
+
+.custom-separator {
+    border-bottom: 1px dashed #E9E9E9;
+    margin: 0 0 10px 0;
+}
+
+.cursor-hand, .cursor-pointer {
+    cursor: pointer !important;
+}
+
+/**
+    For modal
+*/
+.table-sm-2 th, .table-sm-2 td {
+    padding: 0.5rem 0.75rem !important;
+}
+
+    .table-sm-2 th .th-inner {
+        padding: 0rem !important;
+    }
+
+/*.table td {
+    padding-left: 11px !important;
+    padding-top: 11px;
+}*/
+
+.bootstrap-table .fixed-table-toolbar .bs-bars, .bootstrap-table .fixed-table-toolbar .columns, .bootstrap-table .fixed-table-toolbar .search {
+    width: 100%;
+}
+
+.table-sm-3 td {
+    padding: 0.25rem 0.75rem !important;
+}
+
+table thead th {
+    padding: 0.7rem !important;
+}
+
+.avatar-sm-table {
+    width: 40px !important;
+    height: 40px !important;
+}
+
+/**
+    Custom Loading
+*/
+.loadscreen {
+    background: rgba(255,255,255,0.85);
+}
+
+/**
+    Custom Toastr message
+*/
+#toast-container > div {
+    opacity: .95;
+    -ms-filter: progid:DXImageTransform.Microsoft.Alpha(Opacity=95);
+    filter: alpha(opacity=95)
+}
+
+    #toast-container > div:hover {
+        box-shadow: 2px 2px 10px 0 rgba(0,0,0,0.95)
+    }
+
+.toast-progress {
+    background-color: #fff;
+    opacity: 0.3;
+    -ms-filter: progid:DXImageTransform.Microsoft.Alpha(Opacity=30);
+    filter: alpha(opacity=30);
+}
+
+.toast {
+    background-color: #00B5B8 !important
+}
+
+.toast-success {
+    background-color: #16D39A !important
+}
+
+.toast-error {
+    background-color: #FF7588 !important
+}
+
+.toast-info {
+    background-color: #2DCEE3 !important
+}
+
+.toast-warning {
+    background-color: #FFA87D !important
+}
+
+/**
+    For picker
+*/
+.picker__holder {
+    position: fixed !important;
+}
+
+table.picker__table thead th {
+    padding: 0.5rem !important;
+}
+
+/*.picker--opened .picker__holder {
+    min-width: 300px;
+}*/
+
+.picker--date .picker__holder {
+    min-width: 300px;
+}
+
+.picker--time .picker__holder {
+    min-width: 150px;
+}
+
+.picker--focused .picker__day--highlighted, .picker__day--highlighted:hover, .picker__day--infocus:hover, .picker__day--outfocus:hover {
+    background: #E9E2F1;
+    border-color: #663399;
+    color: #000;
+}
+
+.picker__nav--prev:before {
+    font-family: 'iconsmind' !important;
+    content: '\e650' !important;
+}
+
+.picker__nav--next:before {
+    font-family: 'iconsmind' !important;
+    content: '\e660' !important;
+}
+
+.picker__day {
+    font-size: 0.8rem !important;
+}
+
+.picker__footer button {
+    font-size: 0.8rem;
+}
+
+.picker-fit .picker__weekday {
+    padding-left: 7px !important;
+    font-size: 0.7rem !important;
+}
+
+.picker-fit .picker__day {
+    font-size: 0.7rem !important;
+}
+
+.picker-fit .picker__select--year, .picker-fit .picker__select--month {
+    width: 35.5% !important;
+    font-size: 0.7rem !important;
+}
+
+.picker-fit .picker__nav--prev, .picker-fit .picker__nav--next {
+    padding: 8px 0 !important;
+}
+
+/**
+    For fullcalendar
+*/
+.fc-today {
+    background-color: #ede6f3 !important;
+}
+
+/**
+    for table bootstrap
+*/
+.col-w-60 {
+    min-width: 60px !important;
+}
+
+.col-w-80 {
+    min-width: 80px !important;
+}
+
+.col-w-100 {
+    min-width: 100px !important;
+}
+
+.col-w-120 {
+    min-width: 120px !important;
+}
+
+.col-w-150 {
+    min-width: 150px !important;
+}
+
+.col-w-180 {
+    min-width: 180px !important;
+}
+
+.col-w-200 {
+    min-width: 200px !important;
+}
+
+.menu-icon-grid > a[clickable-paging]:hover {
+    color: #fff !important;
+    cursor: pointer;
 }

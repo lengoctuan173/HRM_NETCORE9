@@ -1,0 +1,231 @@
+﻿.btn-xs {
+    padding: 0rem 0.5rem !important;
+    font-size: 0.71137rem !important;
+    line-height: 1.5 !important;
+}
+
+.btn-w60 {
+    width: 60px;
+}
+
+.btn-w80 {
+    width: 80px;
+}
+
+.btn-w100 {
+    width: 100px;
+}
+
+.btn-w120 {
+    width: 120px;
+}
+
+.btn-w150 {
+    width: 150px;
+}
+
+.btn-w200 {
+    width: 200px;
+}
+
+.mt-m1 {
+    margin-top: -0.25rem;
+}
+
+.mt-m2 {
+    margin-top: -0.5rem;
+}
+
+.codehelp {
+    background-color: #bcd9da !important;
+    color: #000 !important;
+    cursor: pointer;
+}
+
+.purle-dark {
+    background-color: #5F308F;
+}
+
+.bg-purple-dark {
+    background-color: #5F308F;
+}
+
+.bg-purple-light {
+    background-color: #CECDF3;
+}
+
+.block-date {
+    margin-top: 5px !important;
+}
+
+.check-validation {
+    color: orangered !important;
+}
+
+@media (min-width: 1600px) {
+    .modal-xlg {
+        max-width: 1200px;
+    }
+}
+
+.kso-name {
+    width: 100%;
+    float: left;
+    font-weight: bold;
+    color: #000;
+    font-size: 16px
+}
+
+.kso-team {
+    width: 100%;
+    float: left;
+    font-size: 90%;
+    color: #999
+}
+
+.kso-email a {
+    width: 100%;
+    float: left;
+    color: #333
+}
+
+.kso-phone a {
+    width: 100%;
+    float: left;
+    color: #333
+}
+
+.bg-info-block {
+    width: 100%;
+    margin: 0 !important
+}
+
+    .bg-info-block ul {
+        margin: 0;
+        padding: 0
+    }
+
+        .bg-info-block ul li {
+            border-bottom: 1px solid #EEE;
+            padding: 10px;
+            margin: 0 !important
+        }
+
+            .bg-info-block ul li:last-child {
+                border-bottom: none;
+            }
+
+            .bg-info-block ul li.active, .bg-info-block ul li:hover {
+                background: #EEE
+            }
+
+                .bg-info-block ul li.active a {
+                    color: #666
+                }
+
+/**
+    FOR TABLE WIDTH
+*/
+.w-60p {
+    width: 60px;
+}
+
+.w-80 {
+    width: 80px !important;
+}
+
+.w-90 {
+    width: 90px !important;
+}
+
+.w-95 {
+    width: 95px !important;
+}
+
+.w-100 {
+    width: 100px !important;
+}
+
+.w-120 {
+    width: 120px;
+}
+
+.w-140 {
+    width: 140px;
+}
+
+.w-160 {
+    width: 160px;
+}
+
+.w-180 {
+    width: 180px;
+}
+
+.w-200 {
+    width: 200px !important;
+}
+
+.w-220 {
+    width: 220px !important;
+}
+
+.w-240 {
+    width: 240px;
+}
+
+.w-300 {
+    width: 300px;
+}
+
+.w-400 {
+    width: 400px;
+}
+
+.w-1200 {
+    width: 1200px !important;
+}
+
+.w-1400 {
+    width: 1400px !important;
+}
+
+.w-1600 {
+    width: 1600px !important;
+}
+
+.w-1800 {
+    width: 1800px !important;
+}
+
+.w-2000 {
+    width: 2000px !important;
+}
+
+.w-2200 {
+    width: 2200px !important;
+}
+
+.w-2400 {
+    width: 2400px !important;
+}
+
+.w-2500 {
+    width: 2500px !important;
+}
+
+.w-2600 {
+    width: 2600px !important;
+}
+
+.w-2800 {
+    width: 2800px !important;
+}
+
+.modal-xl {
+    max-width: 1000px;
+}
+
+.modal-xxl {
+    max-width: 1200px;
+}
