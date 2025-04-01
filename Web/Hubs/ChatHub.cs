@@ -148,5 +148,35 @@ namespace Web.Hubs
                 await Clients.Client(senderConnection).SendAsync("ReceiveFileMessage", msgObject);
             }
         }
+        // Gửi thông tin cuộc gọi
+        public async Task SendCallSignal(string senderId, string receiverId, string signalType, object signalData)
+        {
+            try
+            {
+                var receiverConnection = OnlineUsers.FirstOrDefault(u => u.Value == receiverId).Key;
+                if (receiverConnection != null)
+                {
+                    await Clients.Client(receiverConnection).SendAsync("ReceiveCallSignal", senderId, signalType, signalData);
+                }
+                else
+                {
+                    _logger.LogWarning($"Receiver {receiverId} is not online.");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error processing SendCallSignal: {ex.Message}");
+                throw;
+            }
+        }
+        // Kết thúc cuộc gọi
+        public async Task EndCall(string callerId, string receiverId)
+        {
+            var receiverConnection = OnlineUsers.FirstOrDefault(u => u.Value == receiverId).Key;
+            if (receiverConnection != null)
+            {
+                await Clients.Client(receiverConnection).SendAsync("EndCall", callerId);
+            }
+        }
     }
 }

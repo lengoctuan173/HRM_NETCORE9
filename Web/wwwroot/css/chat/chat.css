@@ -1,4 +1,10 @@
-﻿.me-2 {
+﻿.video-container video {
+    width: 45%;
+    max-height: 300px;
+    margin: 5px;
+    background-color: black;
+}
+.me-2 {
     margin-right: 4px !important;
 }
 .ps-3 {
