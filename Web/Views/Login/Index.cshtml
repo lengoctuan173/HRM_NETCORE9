@@ -1,4 +1,4 @@
-﻿@using Microsoft.AspNetCore.Localization
+﻿﻿@using Microsoft.AspNetCore.Localization
 @{
     Layout = "";
     ViewData["Title"] = "Login";///_Localizer.GetLocalized("Login");
@@ -43,6 +43,7 @@
             cursor: pointer;
             padding: .375rem .75rem;
         }
+
             .custom-dropdown:focus {
                 border-color: #639;
                 outline: none;
@@ -57,7 +58,7 @@
                 <div class="row">
                     <div class="col-md-6 mt-6 mb-6">
                         <div class="p-4">
-                           @*  <div class="auth-logo text-center mb-5">
+                            @*  <div class="auth-logo text-center mb-5">
                                 <img src="@(ViewBag.IsDarkTheme == "1" ? "/Content/images/logo/logo-transparent-dark.jpg" : "/Content/images/logo/logo-transparent.jpg")" alt="">
                             </div> *@
                             <h1 class="mb-3 text-18">@_Localizer.GetLocalizedString("Login")</h1>

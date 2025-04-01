@@ -1,9 +1,11 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Web.Models;
 
 namespace Web.Controllers
 {
+    [Authorize] // Chặn truy cập nếu không đăng nhập
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;

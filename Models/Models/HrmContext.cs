@@ -15,10 +15,65 @@ public partial class HrmContext : DbContext
     {
     }
 
+    public virtual DbSet<Syccchatgroup> Syccchatgroups { get; set; }
+
+    public virtual DbSet<Syccchatgroupmember> Syccchatgroupmembers { get; set; }
+
+    public virtual DbSet<Syccchatmessage> Syccchatmessages { get; set; }
+
     public virtual DbSet<Sycuuser> Sycuusers { get; set; }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
+        => optionsBuilder.UseSqlServer("Server=DESKTOP-3KK8MHO\\MSSQLSERVER2;Database=HRM;User Id=sa;Password=123;TrustServerCertificate=True;");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<Syccchatgroup>(entity =>
+        {
+            entity.HasKey(e => e.GroupChatId);
+
+            entity.ToTable("SYCCCHATGROUP");
+
+            entity.Property(e => e.GroupChatId).HasColumnName("GROUP_CHAT_ID");
+            entity.Property(e => e.GroupChatName).HasColumnName("GROUP_CHAT_NAME");
+        });
+
+        modelBuilder.Entity<Syccchatgroupmember>(entity =>
+        {
+            entity.HasKey(e => e.ChatGroupMemberId);
+
+            entity.ToTable("SYCCCHATGROUPMEMBER");
+
+            entity.Property(e => e.ChatGroupMemberId).HasColumnName("CHAT_GROUP_MEMBER_ID");
+            entity.Property(e => e.ChatGroupId).HasColumnName("CHAT_GROUP_ID");
+            entity.Property(e => e.UserId)
+                .HasMaxLength(50)
+                .HasColumnName("USER_ID");
+        });
+
+        modelBuilder.Entity<Syccchatmessage>(entity =>
+        {
+            entity.HasKey(e => e.ChatId);
+
+            entity.ToTable("SYCCCHATMESSAGE");
+
+            entity.Property(e => e.ChatId).HasColumnName("CHAT_ID");
+            entity.Property(e => e.GroupChatId).HasColumnName("GROUP_CHAT_ID");
+            entity.Property(e => e.Message).HasColumnName("MESSAGE");
+            entity.Property(e => e.ReceiverId)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("RECEIVER_ID");
+            entity.Property(e => e.SenderId)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("SENDER_ID");
+            entity.Property(e => e.Timestamp)
+                .HasColumnType("datetime")
+                .HasColumnName("TIMESTAMP");
+        });
+
         modelBuilder.Entity<Sycuuser>(entity =>
         {
             entity.HasKey(e => e.UserId).HasName("PK__SYCUUSER__F3BEEBFF35979477");

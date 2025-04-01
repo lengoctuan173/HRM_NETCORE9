@@ -1,74 +1,55 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+﻿@{
+    var isDark = Context.Request.Cookies["darktheme"];
+    var isCompact = (Context.Request.Cookies["compact"] ?? "0") == "1";
+}
+<!DOCTYPE html>
+<html class="loading" lang="en" data-textdirection="ltr">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - Web</title>
-    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0, minimal-ui">
+    <meta name="description" content="">
+    <meta name="keywords" content="">
+    <meta name="author" content="">
+    <title>@(String.IsNullOrWhiteSpace(ViewData["Title"]?.ToString()) ? "KSEMS" : ViewData["Title"])</title>
+    <!-- ////////////////////////////////////////////////////////////////////////////-->
+    <link rel="stylesheet" href="~/Content/fonts/fonts.css" />
+    <link rel="stylesheet" href="~/css/theme.css" asp-append-version="true" />
+   @*  <link rel=" stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/Web.styles.css" asp-append-version="true" />
-    <!-- CSS trực tiếp -->
-    <style>
-        html
-        Copy
-        <style >
-        * {
-            box-sizing: border-box; /* Đảm bảo padding và border được tính vào chiều rộng và chiều cao */
-        }
-
-        html, body {
-            height: 100%;
-            margin: 0; /* Loại bỏ margin mặc định */
-            overflow-x: hidden; /* Ẩn cuộn ngang */
-        }
-
-        body {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .container {
-            flex: 1; /* Chiếm không gian còn lại, đẩy footer xuống dưới cùng */
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .card {
-            width: 100%;
-            max-width: 400px; /* Giới hạn chiều rộng tối đa của card */
-            margin: 0 auto; /* Căn giữa card */
-        }
-
-        form {
-            display: flex;
-            flex-direction: column;
-        }
-
-        footer {
-            /* Thêm một số padding để footer không chạm vào đáy */
-            padding: 20px 0;
-        }
+    <link rel=" stylesheet" href="~/css/style.css" asp-append-version="true" />
+    <link rel=" stylesheet" href="~/css/theme-dark.css" asp-append-version="true" /> *@
+    <style type="text/css">
     </style>
+    @RenderSection("Styles", required: false)
 </head>
-<body class="d-flex flex-column min-vh-100">
-    <!-- Main Content -->
-    <div class="container flex-grow-1 d-flex justify-content-center align-items-center">
-        <main role="main" class="pb-3 w-100">
+
+<body class="text-left @(isDark == "1" ? "dark-theme" : "")">
+    <div class="app-admin-wrap layout-sidebar-large clearfix">
+        <!--=============== Left side End ================-->
+        <!-- ============ Body content start ============= -->
+        <div class="main-content-wrap d-flex flex-column @(isCompact ? "" : "sidenav-open")" id="renderbody">
             @RenderBody()
-        </main>
-    </div>
-
-    <!-- Footer -->
-    <footer class="border-top footer text-muted mt-4">
-        <div class="container text-center">
-            &copy; 2025 - Web - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
         </div>
-    </footer>
-
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
-    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+        <!-- ============ Body content End ============= -->
+    </div>
+    <!-- ============ End Customizer Page Opened ============= -->
+    <!-- ////////////////////////////////////////////////////////////////////////////-->
+    <script src="~/js/theme.js"></script>
+    <script src="~/Content/theme/gull/sidebar.large.script.js"></script>
+    <script src="~/Content/theme/gull/customizer.script.js"></script>
+    <script src="~/Content/libs/moment/moment.min.js"></script>
+    <script src="~/js/jquery.datatables.js"></script>
+    <script src="~/js/jquery.picker.js"></script>
+    <script src="~/js/core/ks.ems.common.js" asp-append-version="true"></script>
+    <script src="~/js/core/ks.ems.message.js" asp-append-version="true"></script>
+    <script src="~/js/core/ks.ems.dialog.js" asp-append-version="true"></script>
+    <script src="~/js/core/ks.ems.site.js" asp-append-version="true"></script>
+    <script src="~/js/core/ks.ems.input.validate.js" asp-append-version="true"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
-    @await RenderSectionAsync("Scripts", required: false)
+    <script src="~/js/main.js" asp-append-version="true"></script>
+    <!-- ////////////////////////////////////////////////////////////////////////////-->
+    <script src="~/Scripts/main.js" asp-append-version="true"></script>
+    @RenderSection("Scripts", required: false)
 </body>
 </html>

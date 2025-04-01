@@ -1,0 +1,35 @@
+﻿.chat-content {
+    height: calc(100vh - 343px) !important;
+}
+.chat-design {
+    height: calc(100vh - 154px) !important;
+}
+.ps-3 pe-3 pt-3 pb-3 box-shadow-1 chat-input-area {
+    padding-bottom: 0 !important;
+}
+#renderbody {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+.user .message {
+    background-color: #93a5bb !important; /* Màu xanh giống WhatsApp */
+    padding: 10px;
+    border-radius: 10px;
+    max-width: 75%;
+}
+
+.message {
+    background-color: #d7dbdf !important; /* Màu xanh giống WhatsApp */
+}
+.user {
+    justify-content: flex-end;
+}
+
+    .user img {
+        order: 2; /* Đưa avatar về bên phải */
+        margin-left: 10px;
+    }
+
+    .user .message p {
+        color: #000;
+    }
