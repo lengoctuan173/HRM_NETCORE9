@@ -1,0 +1,1 @@
+dotnet ef dbcontext scaffold "server=192.168.250.24;port=3306;user=admin;password=qZKQ58#3uv;database=KSEMS" Pomelo.EntityFrameworkCore.MySql -o GenModels

@@ -60,6 +60,7 @@ public partial class HrmContext : DbContext
 
             entity.Property(e => e.ChatId).HasColumnName("CHAT_ID");
             entity.Property(e => e.GroupChatId).HasColumnName("GROUP_CHAT_ID");
+            entity.Property(e => e.FilePath).HasMaxLength(200).HasColumnName("FILE_PATH");
             entity.Property(e => e.Message).HasColumnName("MESSAGE");
             entity.Property(e => e.ReceiverId)
                 .HasMaxLength(50)

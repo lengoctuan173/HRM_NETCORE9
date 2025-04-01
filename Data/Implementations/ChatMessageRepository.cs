@@ -32,6 +32,7 @@ namespace Data.Implementations
                     ReceiverName = receiver.UserName,
                     ReceiverImage = receiver.ImagePath ?? "/content/images/avatar/default-avatar.jpg",
                     Content = temp.m.Message,
+                    FilePath = temp.m.FilePath,
                     Timestamp = temp.m.Timestamp.HasValue
                         ? temp.m.Timestamp.Value.ToString("yyyy-MM-dd HH:mm:ss")
                         : "" // Nếu null thì trả về chuỗi rỗng

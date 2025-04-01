@@ -188,7 +188,12 @@ app.Use(async (context, next) =>
 // Kích hoạt Authentication & Authorization
 app.UseAuthentication();
 app.UseAuthorization();
-
+#pragma warning disable ASP0014 // Suggest using top level route registrations
+app.UseEndpoints(endpoints =>
+{
+    endpoints.MapControllers(); // Cho phép Controller xử lý request
+});
+#pragma warning restore ASP0014 // Suggest using top level route registrations
 app.MapStaticAssets();//Cấu hình để ứng dụng có thể phục vụ các file tĩnh như ảnh, CSS, JavaScript.
 
 app.MapControllerRoute(

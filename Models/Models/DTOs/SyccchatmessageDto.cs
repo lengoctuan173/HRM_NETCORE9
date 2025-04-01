@@ -17,5 +17,6 @@ namespace Model.Models.DTOs
         public string ReceiverImage { get; set; }
         public string Content { get; set; }
         public string Timestamp { get; set; }
+        public string FilePath { get; set; }
     }
 }

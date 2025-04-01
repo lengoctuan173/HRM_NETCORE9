@@ -6,14 +6,47 @@ var connection = new signalR.HubConnectionBuilder().withUrl("/chatHub").build();
 document.getElementById("sendButton").disabled = true;
 
 // Hàm tạo tin nhắn theo giao diện Bootstrap
-function createMessageElement(messageObj, isCurrentUser) {
+//function createMessageElement(messageObj, isCurrentUser) {
+//    let messageDiv = document.createElement("div");
+//    messageDiv.classList.add("d-flex", "mb-4", isCurrentUser && "user");
+//    let selectedUserId = document.getElementById("selectedUser").value; // Người đang chat
+//    let currentUserId = document.getElementById("currentUser").value;  // User hiện tại
+//    // Chỉ hiển thị tin nhắn nếu:
+//    // 1. Người gửi là user hiện tại và người nhận là selectedUserId (tin nhắn mình gửi)
+//    // 2. Người nhận là user hiện tại và người gửi là selectedUserId (tin nhắn mình nhận)
+//    let isMessageForCurrentChat =
+//        (messageObj.senderId === currentUserId && messageObj.receiverId === selectedUserId) ||
+//        (messageObj.receiverId === currentUserId && messageObj.senderId === selectedUserId);
+
+//    if (!isMessageForCurrentChat) {
+//        console.warn("🚨 Tin nhắn không phải dành cho cuộc trò chuyện này, bỏ qua.");
+//        return null;
+//    }
+//    // Nếu là người gửi thì lấy ảnh của currentUser, nếu không thì lấy ảnh của receiver
+//    let avatar = isCurrentUser
+//        ? ``
+//        : `<img class="avatar-sm rounded-circle me-3" src="/content/images/avatar/${messageObj.senderImage}" alt="User Avatar">`;
+//    messageDiv.innerHTML = `
+//        ${isCurrentUser ? avatar : ""}
+//        <div class="message flex-grow-1">
+//            <div class="d-flex">
+//                <p class="mb-1 text-title text-16 flex-grow-1">${messageObj.senderName}</p>
+//                <span class="text-small text-muted">${messageObj.timestamp}</span>
+//            </div>
+//            <p class="m-0">${messageObj.content}</p>
+//        </div>
+//        ${isCurrentUser ? "" : avatar}
+//    `;
+
+//    return messageDiv;
+//}
+function createMessageElement(messageObj, isCurrentUser, isFileMessage = false) {
     let messageDiv = document.createElement("div");
     messageDiv.classList.add("d-flex", "mb-4", isCurrentUser && "user");
+
     let selectedUserId = document.getElementById("selectedUser").value; // Người đang chat
     let currentUserId = document.getElementById("currentUser").value;  // User hiện tại
-    // Chỉ hiển thị tin nhắn nếu:
-    // 1. Người gửi là user hiện tại và người nhận là selectedUserId (tin nhắn mình gửi)
-    // 2. Người nhận là user hiện tại và người gửi là selectedUserId (tin nhắn mình nhận)
+
     let isMessageForCurrentChat =
         (messageObj.senderId === currentUserId && messageObj.receiverId === selectedUserId) ||
         (messageObj.receiverId === currentUserId && messageObj.senderId === selectedUserId);
@@ -22,20 +55,24 @@ function createMessageElement(messageObj, isCurrentUser) {
         console.warn("🚨 Tin nhắn không phải dành cho cuộc trò chuyện này, bỏ qua.");
         return null;
     }
-    // Nếu là người gửi thì lấy ảnh của currentUser, nếu không thì lấy ảnh của receiver
+    // Kiểm tra xem có file trong tin nhắn hay không
+    isFileMessage = messageObj.filePath ? true : isFileMessage;
     let avatar = isCurrentUser
         ? ``
         : `<img class="avatar-sm rounded-circle me-3" src="/content/images/avatar/${messageObj.senderImage}" alt="User Avatar">`;
-    //let avatar = `<img class="avatar-sm rounded-circle me-3" src="/content/images/avatar/${isCurrentUser ? messageObj.senderImage : messageObj.receiverImage}" alt="User Avatar">`;
+
+    let messageContent = isFileMessage
+        ? `📎 <a href="/uploads/${messageObj.filePath}" target="_blank">Tải file</a>`
+        : messageObj.content;
 
     messageDiv.innerHTML = `
         ${isCurrentUser ? avatar : ""}
         <div class="message flex-grow-1">
             <div class="d-flex">
-                <p class="mb-1 text-title text-16 flex-grow-1">${isCurrentUser ? messageObj.senderName : messageObj.receiverName}</p>
+                <p class="mb-1 text-title text-16 flex-grow-1">${messageObj.senderName}</p>
                 <span class="text-small text-muted">${messageObj.timestamp}</span>
             </div>
-            <p class="m-0">${messageObj.content}</p>
+            <p class="m-0">${messageContent}</p>
         </div>
         ${isCurrentUser ? "" : avatar}
     `;
@@ -48,7 +85,7 @@ connection.on("ReceiveMessage", function (messageObj) {
     let currentUser = document.getElementById("currentUser").value;
     let chatContent = document.querySelector(".chat-content");
 
-    let messageElement = createMessageElement(messageObj, messageObj.senderId === currentUser);
+    let messageElement = createMessageElement(messageObj, messageObj.senderId === currentUser, false);
     chatContent.appendChild(messageElement);
 
     // Cuộn xuống cuối
@@ -169,6 +206,82 @@ connection.on("ReceiveOldMessages", function (messages) {
         chatContent.appendChild(messageElement);
     });
 
-    // Cuộn xuống cuối
+    //// Cuộn xuống cuối
     chatContent.scrollTop = chatContent.scrollHeight;
+    // Cuộn đến tin nhắn cuối cùng
+    // chatContent.lastElementChild?.scrollIntoView({ behavior: "smooth" });
+});
+
+//FILE
+document.getElementById("uploadFileButton").addEventListener("click", function () {
+    document.getElementById("fileInput").click();
+});
+
+document.getElementById("fileInput").addEventListener("change", function () {
+    let file = this.files[0];
+    if (file) {
+        sendFile(file);
+    }
+});
+function sendFile(file) {
+    let senderId = document.getElementById("currentUser").value;
+    let senderName = document.getElementById("currentUser").getAttribute("data-username");
+
+    let receiverId = document.getElementById("selectedUser").value;
+    let receiverName = document.getElementById("selectedUser").getAttribute("data-username");
+
+    if (!receiverId) {
+        alert("⚠ Vui lòng chọn một người để gửi file.");
+        return;
+    }
+
+    let formData = new FormData();
+    formData.append("file", file);
+    formData.append("senderId", senderId);
+    formData.append("receiverId", receiverId);
+
+    fetch("/Chat/UploadFile", {
+        method: "POST",
+        body: formData
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log("📎 File đã được tải lên:", data.fileUrl);
+
+                // 📌 Debug: Kiểm tra file gửi qua SignalR
+                console.log("🔹 Gửi file qua SignalR: ", senderId, senderName, receiverId, receiverName, data.fileUrl);
+
+                connection.invoke("SendFileMessage", senderId, senderName, receiverId, receiverName, data.fileUrl)
+                    .catch(err => console.error("❌ Lỗi gửi file:", err));
+            } else {
+                alert("❌ Lỗi tải file lên!");
+            }
+        })
+        .catch(err => console.error("❌ Lỗi tải file lên:", err));
+}
+connection.on("ReceiveFileMessage", function (fileMessage) {
+    let chatContent = document.querySelector(".chat-content");
+    if (!chatContent) {
+        return;
+    }
+    let currentUser = document.getElementById("currentUser")?.value;
+    let selectedUser = document.getElementById("selectedUser")?.value;
+
+    let isCurrentUser = fileMessage.senderId === currentUser;
+
+    let isFileForCurrentChat =
+        (fileMessage.senderId === currentUser && fileMessage.receiverId === selectedUser) ||
+        (fileMessage.receiverId === currentUser && fileMessage.senderId === selectedUser);
+
+    if (!isFileForCurrentChat) {
+        return;
+    }
+    // Tạo phần tử tin nhắn với tham số isFileMessage là true
+    let fileMessageElement = createMessageElement(fileMessage, isCurrentUser, true);
+
+    if (fileMessageElement) {
+        chatContent.appendChild(fileMessageElement);
+        chatContent.scrollTop = chatContent.scrollHeight;
+    }
 });

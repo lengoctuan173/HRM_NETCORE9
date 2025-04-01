@@ -16,4 +16,6 @@ public partial class Syccchatmessage
     public DateTime? Timestamp { get; set; }
 
     public long? GroupChatId { get; set; }
+
+    public string? FilePath { get; set; }
 }

@@ -96,5 +96,57 @@ namespace Web.Hubs
             }
             await Clients.Caller.SendAsync("ReceiveMessage", msgObject);
         }
+        public async Task SendFileMessage(string senderId, string senderName, string receiverId, string receiverName, string fileUrl)
+        {
+            var senderConnection = OnlineUsers.FirstOrDefault(u => u.Value == senderId).Key;
+            var receiverConnection = OnlineUsers.FirstOrDefault(u => u.Value == receiverId).Key;
+
+            var chatMessage = new Syccchatmessage
+            {
+                SenderId = senderId,
+                ReceiverId = receiverId,
+                FilePath = fileUrl,
+                Timestamp = DateTime.UtcNow
+            };
+
+            //Đẩy vào hàng đợi để xử lý sau
+            _backgroundQueueWorker.Enqueue(async (serviceProvider, token) =>
+            {
+                try
+                {
+                    using (var scope = serviceProvider.CreateScope())
+                    {
+                        var scopedchatMessageService = scope.ServiceProvider.GetRequiredService<IChatMessageService>();
+                        await scopedchatMessageService.SaveMessageAsync(chatMessage);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Lỗi khi xử lý khi gửi file", senderName);
+                }
+            });
+            var msgObject = new SyccchatmessageDto
+            {
+                SenderId = senderId,
+                SenderName = senderName,
+                ReceiverId = receiverId,
+                ReceiverName = receiverName,
+                Content = chatMessage.Message,
+                FilePath= fileUrl,
+                Timestamp = chatMessage.Timestamp?.ToString("yyyy-MM-dd HH:mm:ss") ?? ""
+            };
+            // Log kiểm tra
+            _logger.LogInformation("📎 Gửi file từ {SenderId} đến {ReceiverId}: {FileUrl}", senderId, receiverId, fileUrl);
+
+            if (receiverConnection != null)
+            {
+                await Clients.Client(receiverConnection).SendAsync("ReceiveFileMessage", msgObject);
+            }
+
+            if (senderConnection != null)
+            {
+                await Clients.Client(senderConnection).SendAsync("ReceiveFileMessage", msgObject);
+            }
+        }
     }
 }

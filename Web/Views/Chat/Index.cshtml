@@ -5,18 +5,22 @@
 <div class="card chat-sidebar-container sidebar-container chat-design"  data-sidebar-container="chat">
     <div class="chat-sidebar-wrap sidebar" data-sidebar="chat" style="left: 0px;">
         <div class="border-end">
-            <div class="pt-2 pb-2 ps-3 pe-3 d-flex align-items-center o-hidden box-shadow-1 chat-topbar">
-                <a class="link-icon d-md-none" data-sidebar-toggle="chat"><i class="icon-regular ms-0 me-3 i-Left"></i></a>
-                <div class="form-group m-0 flex-grow-1">
-                    <input class="form-control form-control-rounded" id="search" type="text" placeholder="Search contacts">
+
+            <div class="chat-sidebar-wrap sidebar" data-sidebar="chat" style="border: none !important;!i;!;border: 4px !important;!i;!;left: 0px;">
+                <div class="border-end">
+                    <div class="pt-2 pb-2 ps-3 pe-3 d-flex align-items-center o-hidden box-shadow-1 chat-topbar">
+                        <a class="link-icon d-md-none" data-sidebar-toggle="chat"><i class="icon-regular ms-0 me-3 i-Left"></i></a>
+                        <div class="form-group m-0 flex-grow-1">
+                            <input class="form-control form-control-rounded" id="search" type="text" placeholder="Search contacts">
+                        </div>
+                    </div>
+                    <div class="contacts-scrollable perfect-scrollbar ps">
+                        <div class="mt-3 pb-2 ps-3 pe-3 fw-bold text-muted border-bottom">
+                            Contacts
+                        </div>
+                        <div class="ps__rail-x" style="left: 0px; bottom: 0px;"><div class="ps__thumb-x" tabindex="0" style="left: 0px; width: 0px;"></div></div><div class="ps__rail-y" style="top: 0px; right: 0px;"><div class="ps__thumb-y" tabindex="0" style="top: 0px; height: 0px;"></div></div>
+                    </div>
                 </div>
-            </div>
-            <div class="contacts-scrollable perfect-scrollbar ps">
-                <div class="mt-3 pb-2 ps-3 pe-3 fw-bold text-muted border-bottom">
-                    Contacts
-                </div>
-                <div class="contacts-scrollable perfect-scrollbar ps"></div>
-                <div class="ps__rail-x" style="left: 0px; bottom: 0px;"><div class="ps__thumb-x" tabindex="0" style="left: 0px; width: 0px;"></div></div><div class="ps__rail-y" style="top: 0px; right: 0px;"><div class="ps__thumb-y" tabindex="0" style="top: 0px; height: 0px;"></div></div>
             </div>
         </div>
     </div>
@@ -39,6 +43,10 @@
                     <input type="hidden" value="@User.Identity.Name" data-username="@User.FindFirst("UserName")?.Value" id="currentUser" />
                     <input type="hidden" id="currentUserImage" value="@User.FindFirst("UserImage")?.Value">
                     <input type="hidden" id="selectedUser" />
+                    <input type="file" id="fileInput" class="d-none" />
+                    <button type="button" class="btn btn-icon btn-rounded btn-outline-secondary me-2" id="uploadFileButton">
+                        <i class="i-Paper-Plane"></i>
+                    </button>
                     <input type="button" class="btn btn-icon btn-rounded btn-outline-primary" id="sendButton" value="Send" />
                 </div>
             </form>
