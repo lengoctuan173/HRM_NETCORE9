@@ -2,18 +2,16 @@
   File Name:    message.js
   Description:  message function script
   ----------------------------------------------------------------------------------------
-  Author:       duy hung
   ----------------------------------------------------------------------------------------
   Date		    | Updater	| Modify Desc
   -------------------------------------------------------------------------------------
-  2020-08-04    | duy hung	| first draft
 ==========================================================================================*/
 
 /**********************************
 *   message box object
 **********************************/
 var $ksmessage = {
-    culture: document.getElementById('_currentCulture').value == '' ? 'en-US' : document.getElementById('_currentCulture').value,
+    culture: document.getElementById('_currentCulture')?.value == '' ? 'en-US' : document.getElementById('_currentCulture')?.value,
     info: function (msg, title, optionsOverride) {
         this.show(toastType.info, msg, title ?? toastTitle[this.culture][4], optionsOverride);
     },

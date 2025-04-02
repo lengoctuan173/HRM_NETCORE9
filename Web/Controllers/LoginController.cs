@@ -24,6 +24,10 @@ namespace Web.Controllers
             }
             return View();
         }
+        public IActionResult Signup()
+        {
+            return View();
+        }
         [HttpPost("login")]
         [AllowAnonymous]
         public async Task<IActionResult> Login(Sycuuser model)
@@ -40,7 +44,6 @@ namespace Web.Controllers
             // Chuyển hướng đến trang Home sau khi đăng nhập thành công
             return RedirectToAction("Index", "Home");
         }
-
         [AllowAnonymous]
         public async Task<IActionResult> Logout()
         {

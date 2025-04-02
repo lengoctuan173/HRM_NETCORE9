@@ -11,6 +11,7 @@ using HRM.Core.Implementations;
 using HRM.Core.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Model.Models;
@@ -131,7 +132,7 @@ var app = builder.Build();
 /// Cấu hình đa ngôn ngữ
 // Sử dụng Localization
 var locOptions = app.Services.GetRequiredService<IOptions<RequestLocalizationOptions>>();
-app.UseRequestLocalization(locOptions.Value);
+ app.UseRequestLocalization(locOptions.Value);
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -140,24 +141,26 @@ if (!app.Environment.IsDevelopment())
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
-
 app.UseHttpsRedirection(); //Tự động chuyển hướng tất cả yêu cầu HTTP sang HTTPS để bảo mật hơn.
-app.UseStaticFiles(); // Đảm bảo file tĩnh được phục vụ trước khi Middleware kiểm tra JWT
 app.UseRouting(); //Bật hệ thống định tuyến của ASP.NET Core.
+app.UseStaticFiles(); // Đảm bảo file tĩnh được phục vụ trước khi Middleware kiểm tra JWT
+// Kích hoạt Authentication & Authorization
+app.UseAuthentication();
+app.UseAuthorization();
 // Middleware kiểm tra JWT hết hạn và xóa cookie nếu cần
 app.Use(async (context, next) =>
 {
     var path = context.Request.Path.Value?.ToLower();
     var token = context.Request.Cookies["JwtToken"];
-
-    // Bỏ qua Middleware nếu truy cập API hoặc SignalR (tránh lỗi vòng lặp)
-    if (path.StartsWith("/api") || path.StartsWith("/chathub") ||
-        path.StartsWith("/content") || path.StartsWith("/css") || path.StartsWith("/js") || path.StartsWith("/images"))
+    var langCookie = context.Request.Cookies[".AspNetCore.Culture"];
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    logger.LogInformation($"Path: {path}, JwtToken: {token}, CultureCookie: {langCookie}");
+    //// Bỏ qua Middleware nếu truy cập API hoặc SignalR (tránh lỗi vòng lặp)
+    if (path.StartsWith("/api") || path.StartsWith("/chathub") || path.Contains("/language") || path.Contains("/content") || path.Contains("/css") || path.Contains("/js") || path.Contains("/scripts") || path.Contains("/images"))
     {
         await next();
         return;
     }
-
     if (!string.IsNullOrEmpty(token))
     {
         var tokenHandler = new JwtSecurityTokenHandler();
@@ -185,9 +188,7 @@ app.Use(async (context, next) =>
 
     await next();
 });
-// Kích hoạt Authentication & Authorization
-app.UseAuthentication();
-app.UseAuthorization();
+
 #pragma warning disable ASP0014 // Suggest using top level route registrations
 app.UseEndpoints(endpoints =>
 {
