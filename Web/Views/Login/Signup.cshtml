@@ -32,17 +32,16 @@
                 <div class="row">
                     <div class="col-md-12">
                         <h4 class="ml-3 mt-3">Create an account</h4>
-                        <p class="ml-3">General Infomation.</p>
                         <div class="card mb-5">
                             <div class="card-body">
                                 <form>
-                                     <fieldset class="form-group">
+                                    <fieldset class="form-group">
                                         <div class="row">
                                             <div class="col-sm-6">
                                                 <div class="form-check">
                                                     <input class="form-check-input" id="radioEmail" type="radio" name="radioSendCode" value="1" checked="checked">
                                                     <label class="form-check-label ms-3" for="radioEmail">
-                                                        Sign up with Email
+                                                        Signup with Email
                                                     </label>
                                                 </div>
                                             </div>
@@ -50,7 +49,7 @@
                                                 <div class="form-check">
                                                     <input class="form-check-input" id="radioMobile" type="radio" name="radioSendCode" value="2">
                                                     <label class="form-check-label ms-3" for="radioMobile">
-                                                        Sign up with Mobile
+                                                        Signup with Mobile
                                                     </label>
                                                 </div>
                                             </div>
@@ -66,36 +65,37 @@
                                             <label class="col-form-label" for="inputMobile">@_Localizer.GetLocalizedString("Mobile")</label>
                                             <input asp-for="Mobile" id="inputMobile" class="form-control" placeholder="@_Localizer.GetLocalizedString("Mobile")" required />
                                             <span asp-validation-for="Mobile" class="text-danger"></span>
-                                        </div> 
-                                    </div>
-                                    <div class="form-group row">
-                                        <div class="col-sm-12">
-                                            <label class="col-form-label" for="inputCode">Verification Code</label>
-                                            <div class="row">
-                                                <div class="col-sm-2">
-                                                    <button id="btnSendCode" class="btn btn-primary w-100" type="button">@_Localizer.GetLocalizedString("Send")</button>
-                                                </div>
-                                                <div class="col-sm-3">
-                                                    <input id="inputCode" class="form-control" placeholder="@_Localizer.GetLocalizedString("Code")" required />
-                                                </div>
-                                            </div>
                                         </div>
                                     </div>
-                                    <div class="form-group row">
+                                    <div class="form-group row" id="rowVerification">
+                                        <div class="col-sm-12">
+                                            <label class="col-form-label" for="inputCode">Verification Code</label>
+                                            <div class="alert fade show alert-success d-none" id="lblVerifisuccess" role="alert">
+                                                <strong class="text-capitalize">Success!</strong> This OTP is valid for 2 minutes. Please enter the verification code send to your email!
+                                            </div>
+                                            <input id="inputCode" class="form-control w-100" disabled placeholder="@_Localizer.GetLocalizedString("Code")" required />
+                                        </div>
+                                        <div class="col-sm-12 text-center">
+                                            <button id="btnSendCode" class="btn btn-primary w-100 mt-2" type="button">@_Localizer.GetLocalizedString("Send")</button>
+                                            <button id="btnReSendCode" class="btn btn-outline-primary w-20 mt-2 d-none" type="button">@_Localizer.GetLocalizedString("Resend")</button>
+                                            <button id="btnVerifyCode" class="btn btn-success w-20 d-none mt-2" type="button">@_Localizer.GetLocalizedString("Verify")</button>
+                                        </div>
+                                    </div>
+                                    <div class="form-group row d-none" id="rowpassword">
                                         <div class="col-sm-12">
                                             <label class="col-form-label" for="inputPassword">Password</label>
                                             <input type="password" asp-for="Password" id="inputPassword" class="form-control" placeholder="@_Localizer.GetLocalizedString("Password")" required />
                                             <span asp-validation-for="Password" class="text-danger"></span>
                                         </div>
                                     </div>
-                                    <div class="form-group row">
+                                    <div class="form-group row d-none" id="rowconfirmpassword">
                                         <div class="col-sm-12">
                                             <label class="col-form-label" for="inputConfirmPassword">Confirm Password</label>
                                             <input type="password" asp-for="Password" id="inputConfirmPassword" class="form-control" placeholder="@_Localizer.GetLocalizedString("Confirm Password")" required />
                                             <span asp-validation-for="Password" class="text-danger"></span>
                                         </div>
                                     </div>
-                                  
+
                                     <div class="form-group row">
                                         <div class="col-sm-12">
                                             <div class="form-check">
@@ -108,7 +108,7 @@
                                     </div>
                                     <div class="form-group row">
                                         <div class="col-sm-12 text-center">
-                                            <button id="btnSignup" class="btn btn-primary w-20">@_Localizer.GetLocalizedString("Signup")</button>
+                                            <button disabled id="btnSignup" class="btn btn-primary w-20 ">@_Localizer.GetLocalizedString("Signup")</button>
                                         </div>
                                     </div>
                                 </form>

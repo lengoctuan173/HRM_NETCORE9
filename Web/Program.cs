@@ -18,6 +18,8 @@ using Model.Models;
 using Web.Hubs;
 using Web.Resources;
 var builder = WebApplication.CreateBuilder(args);
+/// Cau hinh cho send code
+builder.Services.AddMemoryCache();
 /// Cấu hình đa ngôn ngữ Localization
 builder.Services.AddLocalization();
 // Cấu hình để lấy ngôn ngữ từ request
@@ -107,6 +109,8 @@ builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IChatMessageRepository, ChatMessageRepository>();
 builder.Services.AddSingleton<IBackgroundQueueWorker, BackgroundQueueWorker>();
 builder.Services.AddHostedService<QueueProcessingWorker>();
+// Đăng ký EmailService
+builder.Services.AddScoped<IEmailSender, EmailSender>();
 //// Đăng ký ICommonService duy nhất
 builder.Services.AddScoped<ICommonService, CommonService>();
 //// Tự động đăng ký tất cả Service có hậu tố "Service"
