@@ -126,7 +126,7 @@
   <data name="Password" xml:space="preserve">
     <value>Mật khẩu</value>
   </data>
-  <data name="Pleaseinpupassword" xml:space="preserve">
+  <data name="Pleaseinputpassword" xml:space="preserve">
     <value>Vui lòng nhập mật khẩu.</value>
   </data>
   <data name="Pleaseinputemailormobile" xml:space="preserve">
