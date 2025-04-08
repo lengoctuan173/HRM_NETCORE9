@@ -69,5 +69,15 @@ namespace Business.Implementations
             }
             return _jwtHelper.GenerateToken(user.UserId, "admin", user.UserName, user.ImagePath);
         }
+        public async Task<bool> isExistUserByEmail(string email)
+        {
+            var user = await _authRepository.GetUserByEmailAsync(email);
+            return user != null;
+        }
+        public async Task<bool> isExistUserByMobile(string mobile)
+        {
+            var user = await _authRepository.GetUserByMobileAsync(mobile);
+            return user != null;
+        }
     }
 }

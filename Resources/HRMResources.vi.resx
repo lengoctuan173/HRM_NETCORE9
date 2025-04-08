@@ -118,33 +118,24 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="ForgotPassword" xml:space="preserve">
-    <value>Forgot Password</value>
+    <value>Quên mật khẩu</value>
   </data>
-  <data name="Login" xml:space="preserve">
-    <value>Login</value>
+  <data name="Login_Err" xml:space="preserve">
+    <value>Email hoặc số điện thoại không hợp lệ !</value>
   </data>
   <data name="Password" xml:space="preserve">
-    <value>Password</value>
-  </data>
-  <data name="Register" xml:space="preserve">
-    <value>Register</value>
-  </data>
-  <data name="Registerwith" xml:space="preserve">
-    <value>Register with</value>
+    <value>Mật khẩu</value>
   </data>
   <data name="Signin" xml:space="preserve">
-    <value>Sign in</value>
+    <value>Đăng nhập</value>
   </data>
   <data name="Signinwith" xml:space="preserve">
-    <value>Sign in with</value>
+    <value>Đăng nhập với</value>
   </data>
   <data name="Signup" xml:space="preserve">
-    <value>Sign up</value>
+    <value>Đăng ký</value>
   </data>
   <data name="Signupwith" xml:space="preserve">
-    <value>Sign up with</value>
-  </data>
-  <data name="Username" xml:space="preserve">
-    <value>Username</value>
+    <value>Đăng ký với</value>
   </data>
 </root>

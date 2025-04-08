@@ -15,8 +15,8 @@ using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Model.Models;
+using Resources;
 using Web.Hubs;
-using Web.Resources;
 var builder = WebApplication.CreateBuilder(args);
 /// Cau hinh cho send code
 builder.Services.AddMemoryCache();
@@ -131,7 +131,11 @@ builder.Services.AddDbContext<HrmContext>(options =>
     ServiceLifetime.Scoped);
 // Add services to the container.
 builder.Services.AddControllersWithViews().AddViewLocalization() // Hỗ trợ dịch trong Views
-    .AddDataAnnotationsLocalization(); // Hỗ trợ dịch Validation Message;
+    .AddDataAnnotationsLocalization(options =>
+    {
+        options.DataAnnotationLocalizerProvider = (type, factory) =>
+            factory.Create(typeof(HRMResources)); // dùng chung 1 file resource
+    });
 
 var app = builder.Build();
 /// Cấu hình đa ngôn ngữ

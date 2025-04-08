@@ -13,14 +13,14 @@ namespace Web.Controllers.Api
     [ApiController]
     public class LoginController : ControllerBase
     {
-        private readonly HrmContext _context;
         private readonly IMemoryCache _cache;
         private readonly IEmailSender _emailSender;
-        public LoginController(HrmContext context, IMemoryCache cache = null, IEmailSender emailSender = null)
+        private readonly IAuthService _authService;
+        public LoginController(IMemoryCache cache = null, IEmailSender emailSender = null, ICommonService commonService = null)
         {
-            _context = context;
             _cache = cache;
             _emailSender = emailSender;
+            _authService = commonService.GetService<IAuthService>();
         }
         [HttpPost("send-code")]
         public async Task<IActionResult> SendCode([FromBody] SendCodeRequestDto request)
@@ -28,6 +28,10 @@ namespace Web.Controllers.Api
             var isResult = false;
             if (string.IsNullOrEmpty(request.Email))
                 return BadRequest("Email is required.");
+            if(await _authService.isExistUserByEmail(request.Email)) // Email exist - > login
+            {
+                return Ok(new { isResult, isExist = true, message = "Email is exists." });
+            }    
             // Tạo mã OTP ngẫu nhiên 6 chữ số
             var otp = new Random().Next(100000, 999999).ToString();
             // Lưu OTP vào cache với thời gian hết hạn là 5 phút

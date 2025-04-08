@@ -98,7 +98,12 @@ class Signup {
                     this.otpTimeout = 60;  // Reset lại thời gian mỗi lần gửi mã mới
                     this.startOtpCountdown();
                 }
-                this.showFormSendCode(response.isResult);
+                if (response.isExist) {
+                    window.location.href = "/login/index";
+                }
+                else {
+                    this.showFormSendCode(response.isResult);
+                }
             },
             error:(response) => { 
                 //alert("Error: " + xhr.responseText);

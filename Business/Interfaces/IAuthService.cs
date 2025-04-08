@@ -14,5 +14,7 @@ namespace Business.Interfaces
         Task<string> AuthenticateUserByEmail(string email, string password);
         Task<string> RegisterUserByMobile(string mobile, string password);
         Task<string> RegisterUserByEmail(string email, string password);
+        Task<bool> isExistUserByEmail(string email);
+        Task<bool> isExistUserByMobile(string mobile);
     }
 }

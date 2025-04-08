@@ -7,6 +7,8 @@ using Web.Helper;
 using Business;
 using Microsoft.AspNetCore.Http;
 using HRM.Core.Interfaces;
+using Model.Models.DTOs;
+using Resources;
 
 namespace Web.Controllers
 {
@@ -14,10 +16,12 @@ namespace Web.Controllers
     {
         private readonly IAuthService _authService;
         private readonly IValidationHelper _validationHelper;
-        public LoginController(ICommonService commonService, IValidationHelper validationHelper)
+        private readonly LocalizerService _localizerService;
+        public LoginController(ICommonService commonService, IValidationHelper validationHelper, LocalizerService localizerService)
         {
             _authService = commonService.GetService<IAuthService>();
             _validationHelper = validationHelper;
+            _localizerService = localizerService;
         }
         public IActionResult Index()
         {
@@ -34,7 +38,7 @@ namespace Web.Controllers
         }
         [HttpPost]
         [AllowAnonymous]
-        public async Task<IActionResult> Login(Sycuuser model)
+        public async Task<IActionResult> Login(SycuuserDto model)
         {
             var token = string.Empty;
             if (_validationHelper.IsEmail(model.UserId))
@@ -47,8 +51,9 @@ namespace Web.Controllers
             }
             if (token == null)
             {
-                ViewBag.Error = "Sai tài khoản hoặc mật khẩu!";
-                return View("Index"); // Hiển thị lại trang login với thông báo lỗi
+                //ViewBag.Error = "Sai tài khoản hoặc mật khẩu!";
+                TempData["LoginError"] = _localizerService.GetLocalizedString("Login_Err");
+                return RedirectToAction("Index", "Login");
             }
             // Lưu Token vào Cookie (gọi hàm tiện ích)
             CookieHelper.SetToken(Response, token, Request.IsHttps);
