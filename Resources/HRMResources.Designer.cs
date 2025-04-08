@@ -88,20 +88,20 @@ namespace Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Please input password.
-        /// </summary>
-        public static string Pleaseinpupassword {
-            get {
-                return ResourceManager.GetString("Pleaseinpupassword", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Please input email or mobile.
         /// </summary>
         public static string Pleaseinputemailormobile {
             get {
                 return ResourceManager.GetString("Pleaseinputemailormobile", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Please input password.
+        /// </summary>
+        public static string Pleaseinputpassword {
+            get {
+                return ResourceManager.GetString("Pleaseinputpassword", resourceCulture);
             }
         }
         
