@@ -126,6 +126,12 @@
   <data name="Password" xml:space="preserve">
     <value>Password</value>
   </data>
+  <data name="Pleaseinpupassword" xml:space="preserve">
+    <value>Please input password</value>
+  </data>
+  <data name="Pleaseinputemailormobile" xml:space="preserve">
+    <value>Please input email or mobile</value>
+  </data>
   <data name="Signin" xml:space="preserve">
     <value>Sign in</value>
   </data>

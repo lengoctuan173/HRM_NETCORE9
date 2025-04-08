@@ -70,12 +70,12 @@
                                 }
                                @*  <div asp-validation-summary="All" class="text-danger mb-3"></div> *@
                                 <div class="form-group mb-3">
-                                    <input asp-for="UserId" class="form-control" placeholder="@_Localizer.GetLocalizedString("Mobile / Email")" />
+                                    <input asp-for="UserId" class="form-control" oninvalid="this.setCustomValidity('@_Localizer.GetLocalizedString("Pleaseinputemailormobile")')" oninput="this.setCustomValidity('')" placeholder="@_Localizer.GetLocalizedString("Mobile / Email")" required />
                                    @*  <span asp-validation-for="UserId" class="text-danger"></span> *@
                                 </div>
 
                                 <div class="form-group mb-3">
-                                    <input type="password" asp-for="Password" class="form-control" placeholder="@_Localizer.GetLocalizedString("Password")" required />
+                                    <input type="password" asp-for="Password" oninvalid="this.setCustomValidity('@_Localizer.GetLocalizedString("Pleaseinputpassword")')" oninput="this.setCustomValidity('')" class="form-control" placeholder="@_Localizer.GetLocalizedString("Password")" required />
                                   @*   <span asp-validation-for="Password" class="text-danger"></span> *@
                                 </div>
 
