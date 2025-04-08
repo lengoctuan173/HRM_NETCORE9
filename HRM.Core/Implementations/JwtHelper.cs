@@ -33,7 +33,7 @@ namespace HRM.Core.Implementations
                     new Claim(ClaimTypes.Name, userid),
                     new Claim(ClaimTypes.Role, role),
                     new Claim("UserName", username),
-                    new Claim("UserImage", imagePath)
+                    new Claim("UserImage", imagePath ?? "default-avatar.jpg")
                 }),
                 Expires = DateTime.UtcNow.AddMinutes(Convert.ToDouble(_configuration["JwtSettings:ExpiryMinutes"])), //Thời gian hết hạn
                 Issuer = _configuration["JwtSettings:Issuer"], //người phát hành token
@@ -45,4 +45,5 @@ namespace HRM.Core.Implementations
             return tokenHandler.WriteToken(token);
         }
     }
+
 }

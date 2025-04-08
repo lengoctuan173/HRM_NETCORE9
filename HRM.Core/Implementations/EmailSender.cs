@@ -9,7 +9,8 @@ using HRM.Core.Interfaces;
 using Microsoft.Extensions.Configuration;
 using MimeKit;
 using MailKit.Security;
-using MailKit.Net.Smtp; // SmtpClient từ MailKit
+using MailKit.Net.Smtp;
+using System.Text.RegularExpressions; // SmtpClient từ MailKit
 
 namespace HRM.Core.Implementations
 {
@@ -33,6 +34,8 @@ namespace HRM.Core.Implementations
                 email.Body = new TextPart("html") { Text = body };
 
                 using var smtp = new MailKit.Net.Smtp.SmtpClient();
+                // Gmail đôi khi gặp lỗi xác thực chứng chỉ ⇒ bỏ kiểm tra (DEV only)
+                smtp.ServerCertificateValidationCallback = (s, c, h, e) => true;
                 await smtp.ConnectAsync(
                     _configuration["Email:SmtpServer"],
                     Convert.ToInt32(_configuration["Email:Port"]),

@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Data.Interfaces;
 using HRM.Core.Implementations;
 using HRM.Core.Interfaces;
+using Model.Models;
 namespace Business.Implementations
 {
     public class AuthService: IAuthService
@@ -26,6 +27,42 @@ namespace Business.Implementations
         public async Task<string> AuthenticateUser(string userid, string password)
         {
             var user = await _authRepository.GetUserByUserIdAsync(userid);
+            if (user == null || !_passwordHasher.VerifyPassword(user.Password, password))
+            {
+                return null; // Sai mật khẩu hoặc không tìm thấy user
+            }
+            return _jwtHelper.GenerateToken(user.UserId, "admin", user.UserName, user.ImagePath);
+        }
+        public async Task<string> AuthenticateUserByMobile(string mobile, string password)
+        {
+            var user = await _authRepository.GetUserByMobileAsync(mobile);
+            if (user == null || !_passwordHasher.VerifyPassword(user.Password, password))
+            {
+                return null; // Sai mật khẩu hoặc không tìm thấy user
+            }
+            return _jwtHelper.GenerateToken(user.UserId, "admin", user.UserName, user.ImagePath);
+        }
+        public async Task<string> AuthenticateUserByEmail(string email, string password)
+        {
+            var user = await _authRepository.GetUserByEmailAsync(email);
+            if (user == null || !_passwordHasher.VerifyPassword(user.Password, password))
+            {
+                return null; // Sai mật khẩu hoặc không tìm thấy user
+            }
+            return _jwtHelper.GenerateToken(user.UserId, "admin", user.UserName, user.ImagePath);
+        }
+        public async Task<string> RegisterUserByMobile(string mobile, string password)
+        {
+            var user = await _authRepository.RegisterUserByMobile(mobile, password);
+            if (user == null || !_passwordHasher.VerifyPassword(user.Password, password))
+            {
+                return null; // Sai mật khẩu hoặc không tìm thấy user
+            }
+            return _jwtHelper.GenerateToken(user.UserId, "admin", user.UserName, user.ImagePath);
+        }
+        public async Task<string> RegisterUserByEmail(string email, string password)
+        {
+            var user = await _authRepository.RegisterUserByEmail(email, password);
             if (user == null || !_passwordHasher.VerifyPassword(user.Password, password))
             {
                 return null; // Sai mật khẩu hoặc không tìm thấy user
