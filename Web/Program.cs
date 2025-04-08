@@ -104,13 +104,14 @@ builder.Services.AddAuthorization();
 builder.Services.AddSingleton<LocalizerService>();
 // Dang ky JWT va Password
 builder.Services.AddScoped<IJwtHelper, JwtHelper>();
+builder.Services.AddSingleton<IValidationHelper, ValidationHelper>();
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IChatMessageRepository, ChatMessageRepository>();
 builder.Services.AddSingleton<IBackgroundQueueWorker, BackgroundQueueWorker>();
 builder.Services.AddHostedService<QueueProcessingWorker>();
 // Đăng ký EmailService
-builder.Services.AddScoped<IEmailSender, EmailSender>();
+builder.Services.AddSingleton<IEmailSender, EmailSender>();
 //// Đăng ký ICommonService duy nhất
 builder.Services.AddScoped<ICommonService, CommonService>();
 //// Tự động đăng ký tất cả Service có hậu tố "Service"

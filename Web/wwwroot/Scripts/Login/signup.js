@@ -3,7 +3,7 @@ class Signup {
     constructor() {
         this.initEvents();
         this.otpTimer = null;
-        this.otpTimeout = 120; // 2 minutes countdown (in seconds)
+        this.otpTimeout = 60; // 1 minutes countdown (in seconds)
     }
     initEvents() {
         // Sự kiện thay đổi radio button
@@ -28,67 +28,81 @@ class Signup {
 
     handleSignup(e) {
         e.preventDefault(); // Ngăn chặn form submit mặc định
-        let email = $("#inputEmail").val().trim();
-        let mobile = $("#inputMobile").val().trim();
         let password = $("#inputPassword").val().trim();
         let confirmPassword = $("#inputConfirmPassword").val().trim();
         let isEmail = $("input[name='radioSendCode']:checked").val() === '1';
         // Kiểm tra dữ liệu nhập vào
-        if (isEmail && email === "") {
-            alert("Email is required!");
-            return;
-        }
-
-        if (!isEmail && mobile === "") {
-            alert("Mobile is required!");
-            return;
-        }
-
         if (password === "" || confirmPassword === "") {
             alert("Password fields cannot be empty!");
             return;
         }
-
+        // Kiểm tra nếu password và confirm password không khớp
         if (password !== confirmPassword) {
-            alert("Passwords do not match!");
+            // Thêm lỗi vào confirm password
+            $("#formSignup")[0].classList.add("was-validated");
+            $("#inputConfirmPassword")[0].setCustomValidity("err!");
             return;
+        } else {
+            // Đặt lại lỗi nếu mật khẩu khớp
+            $("#inputConfirmPassword")[0].setCustomValidity("");
+            
         }
-
+        let requestData = isEmail
+            ? { Email: $("#inputEmail").val().trim(), isEmail: true, Password: password }
+            : { Mobile: $("#inputMobile").val().trim(), isEmail: false, Password: password };
+        $.ajax({
+            url: "/login/Signup", // Đảm bảo API này đúng đường dẫn
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify(requestData),
+            success: (response) => {
+                if (response.isResult) {
+                    // Thành công → chuyển trang hoặc hiện thông báo
+                    window.location.href = "/home/index";
+                }
+            },
+            error: (response) => {
+               
+            }
+        });
         // Nếu hợp lệ, submit form
-        $("form").submit();
+    /*    $("form").submit();*/
     }
 
     sendVerificationCode() {
+        const form = document.getElementById("formSignup");
         let isEmail = $("input[name='radioSendCode']:checked").val() === '1';
+        // Lấy giá trị từ trường email hoặc số điện thoại
         let contactInfo = isEmail ? $("#inputEmail").val().trim() : $("#inputMobile").val().trim();
-
-        if (contactInfo === "") {
-            alert(isEmail ? "Please enter your email!" : "Please enter your mobile number!");
+        // Kiểm tra tính hợp lệ của trường tương ứng với lựa chọn (email hoặc số điện thoại)
+        let isValid = isEmail ? $("#inputEmail")[0].checkValidity() : $("#inputMobile")[0].checkValidity();
+        if (contactInfo === "" || !isValid) {
+            form.classList.add("was-validated");
             return;
         }
-        $("#btnSendCode,#btnReSendCode").addClass('d-none');
-        $("#btnVerifyCode,#lblVerifisuccess").removeClass('d-none');
-        $('#inputCode').prop('disabled', false).focus();
-        this.otpTimeout = 120;  // Reset lại thời gian mỗi lần gửi mã mới
-        // Bắt đầu đếm ngược thời gian
-        this.startOtpCountdown();
+        $('#btnReSendCode').hasClass('d-none') || $('#btnReSendCode').addClass('d-none');
         // TODO: Gọi API gửi mã xác nhận tại đây
         let requestData = isEmail
             ? { email: contactInfo, mobile: "" }
             : { email: "", mobile: contactInfo };
-
+       
         // Gửi request đến API
         $.ajax({
             url: "/api/login/send-code", // Đảm bảo API này đúng đường dẫn
             type: "POST",
             contentType: "application/json",
             data: JSON.stringify(requestData),
-            success: function (response) {
-               // alert(response.message);
-                $("#btnSendCode").prop("disabled", false).text("Send");
+            success: (response) => { 
+                if (response.isResult) {
+                    // Bắt đầu đếm ngược thời gian
+                    this.otpTimeout = 60;  // Reset lại thời gian mỗi lần gửi mã mới
+                    this.startOtpCountdown();
+                }
+                this.showFormSendCode(response.isResult);
             },
-            error: function (xhr) {
+            error:(response) => { 
                 //alert("Error: " + xhr.responseText);
+                this.showFormSendCode(false);
             }
         });
     }
@@ -101,7 +115,6 @@ class Signup {
             alert("Please enter the OTP!");
             return;
         }
-
         let requestData = isEmail
             ? { email: contactInfo, otp: otp }
             : { mobile: contactInfo, otp: otp };
@@ -113,19 +126,39 @@ class Signup {
             contentType: "application/json",
             data: JSON.stringify(requestData),
             success: (response) => { // Dùng arrow function để giữ ngữ cảnh `this`
-                this.showFormPassword(); // ✅ Đúng
-               // alert(response.message);
+                if (response.isResult) {
+                    this.showFormVerified(); // ✅ Đúng
+                }
+                else {
+                    alert("Error: Invalid OTP!")
+                }
             },
             error: function (xhr) {
                // alert("Error: " + xhr.responseText);  // Hiển thị thông báo lỗi nếu có
             }
         });
     }
+    toggleVisibility = (selectors, action) => {
+        $(selectors)[action]('d-none');
+    };
+    showFormSendCode(isResultSendcode) {
+        this.toggleVisibility("#btnSendCode", "addClass");
+        this.toggleVisibility("#btnVerifyCode,#lblVerifisuccess", "removeClass");
+        $('#inputCode').prop('disabled', !isResultSendcode).focus();
+        if (!isResultSendcode) {
+            $("#lblVerifisuccess")
+                .removeClass('alert-success')
+                .addClass('alert-danger')
+                .text(`OTP sent error. Please enter Resend to receive new OTP!`);
+            this.toggleVisibility("#btnReSendCode", "removeClass");
+        }
+    }
     //Ham hien thi password
-    showFormPassword() {
-        $('#rowpassword,#rowconfirmpassword').removeClass('d-none'); 
-        $("#rowVerification").addClass('d-none');
+    showFormVerified() {
+        this.toggleVisibility("#rowpassword,#rowconfirmpassword", "removeClass");
+        this.toggleVisibility("#rowVerification", "addClass");
         $('#inputEmail').prop('disabled', true);
+        $("#btnSignup").prop('disabled', false);
         $('#rowpassword').focus();
     }
     // Hàm hiển thị thông báo lỗi gần trường nhập liệu
@@ -142,7 +175,7 @@ class Signup {
                 $("#btnReSendCode").removeClass("d-none"); // Hiển thị nút resend
                 countdownDisplay.text("OTP expired, please resend the code.");
             } else {
-                countdownDisplay.text(`This OTP is valid for ${this.otpTimeout} seconds.`);
+                countdownDisplay.text(`This OTP is valid for ${this.otpTimeout} seconds. Please enter the verification code send to your email!`);
                 this.otpTimeout--; // Giảm thời gian mỗi giây
             }
         }, 1000); // Cập nhật mỗi giây

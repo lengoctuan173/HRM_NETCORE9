@@ -32,23 +32,23 @@
                 <div class="row">
                     <div class="col-md-12">
                         <h4 class="ml-3 mt-3">Create an account</h4>
-                        <div class="card mb-5">
+                        <div class="card mb-4">
                             <div class="card-body">
-                                <form>
+                                <form id="formSignup" class="needs-validation" novalidate="novalidate">
                                     <fieldset class="form-group">
                                         <div class="row">
                                             <div class="col-sm-6">
                                                 <div class="form-check">
                                                     <input class="form-check-input" id="radioEmail" type="radio" name="radioSendCode" value="1" checked="checked">
-                                                    <label class="form-check-label ms-3" for="radioEmail">
+                                                    <label class="form-label ms-3" for="radioEmail">
                                                         Signup with Email
                                                     </label>
                                                 </div>
                                             </div>
                                             <div class="col-sm-6">
                                                 <div class="form-check">
-                                                    <input class="form-check-input" id="radioMobile" type="radio" name="radioSendCode" value="2">
-                                                    <label class="form-check-label ms-3" for="radioMobile">
+                                                    <input class="form-check-input" disabled id="radioMobile" type="radio" name="radioSendCode" value="2">
+                                                    <label class="form-label ms-3" for="radioMobile">
                                                         Signup with Mobile
                                                     </label>
                                                 </div>
@@ -59,19 +59,19 @@
                                         <div id="rowEmail" class="col-sm-12">
                                             <label class="col-form-label" for="inputEmail">Email</label>
                                             <input type="email" asp-for="UserEmail" id="inputEmail" class="form-control" placeholder="@_Localizer.GetLocalizedString("Email")" required />
-                                            <span asp-validation-for="UserEmail" class="text-danger"></span>
+                                            <div class="invalid-feedback">Please enter a valid email!</div>
                                         </div>
                                         <div id="rowMobile" class="col-sm-12 d-none">
                                             <label class="col-form-label" for="inputMobile">@_Localizer.GetLocalizedString("Mobile")</label>
                                             <input asp-for="Mobile" id="inputMobile" class="form-control" placeholder="@_Localizer.GetLocalizedString("Mobile")" required />
-                                            <span asp-validation-for="Mobile" class="text-danger"></span>
+                                            <div class="invalid-feedback">Please enter a valid mobile!</div>
                                         </div>
                                     </div>
                                     <div class="form-group row" id="rowVerification">
                                         <div class="col-sm-12">
                                             <label class="col-form-label" for="inputCode">Verification Code</label>
                                             <div class="alert fade show alert-success d-none" id="lblVerifisuccess" role="alert">
-                                                <strong class="text-capitalize">Success!</strong> This OTP is valid for 2 minutes. Please enter the verification code send to your email!
+                                                <strong class="text-capitalize">Sending...!</strong>
                                             </div>
                                             <input id="inputCode" class="form-control w-100" disabled placeholder="@_Localizer.GetLocalizedString("Code")" required />
                                         </div>
@@ -85,14 +85,14 @@
                                         <div class="col-sm-12">
                                             <label class="col-form-label" for="inputPassword">Password</label>
                                             <input type="password" asp-for="Password" id="inputPassword" class="form-control" placeholder="@_Localizer.GetLocalizedString("Password")" required />
-                                            <span asp-validation-for="Password" class="text-danger"></span>
+                                            <div class="invalid-feedback">Please enter a password!</div>
                                         </div>
                                     </div>
                                     <div class="form-group row d-none" id="rowconfirmpassword">
                                         <div class="col-sm-12">
                                             <label class="col-form-label" for="inputConfirmPassword">Confirm Password</label>
                                             <input type="password" asp-for="Password" id="inputConfirmPassword" class="form-control" placeholder="@_Localizer.GetLocalizedString("Confirm Password")" required />
-                                            <span asp-validation-for="Password" class="text-danger"></span>
+                                            <div class="invalid-feedback">Password and confirm password must match!</div>
                                         </div>
                                     </div>
 
@@ -100,7 +100,7 @@
                                         <div class="col-sm-12">
                                             <div class="form-check">
                                                 <input class="form-check-input" id="checkPrivate" type="checkbox">
-                                                <label class="form-check-label ms-3" for="checkPrivate">
+                                                <label class="form-label ms-3" for="checkPrivate">
                                                     By signing up you agree to our terms and conditions and privacy policy. We will never share or sell your information or data.
                                                 </label>
                                             </div>
@@ -113,7 +113,7 @@
                                     </div>
                                 </form>
                             </div>
-                        </div>
+                        </div>    
                     </div>
                 </div>
             </div>

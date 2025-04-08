@@ -5,15 +5,19 @@ using Data.Interfaces;
 using Business.Interfaces;
 using Web.Helper;
 using Business;
+using Microsoft.AspNetCore.Http;
+using HRM.Core.Interfaces;
 
 namespace Web.Controllers
 {
     public class LoginController : Controller
     {
         private readonly IAuthService _authService;
-        public LoginController(ICommonService commonService)
+        private readonly IValidationHelper _validationHelper;
+        public LoginController(ICommonService commonService, IValidationHelper validationHelper)
         {
-          _authService = commonService.GetService<IAuthService>();
+            _authService = commonService.GetService<IAuthService>();
+            _validationHelper = validationHelper;
         }
         public IActionResult Index()
         {
@@ -28,11 +32,19 @@ namespace Web.Controllers
         {
             return View();
         }
-        [HttpPost("login")]
+        [HttpPost]
         [AllowAnonymous]
         public async Task<IActionResult> Login(Sycuuser model)
         {
-            var token =  await _authService.AuthenticateUser(model.UserId, model.Password);
+            var token = string.Empty;
+            if (_validationHelper.IsEmail(model.UserId))
+            {
+                token = await _authService.AuthenticateUserByEmail(model.UserId, model.Password);
+            }
+            else
+            {
+                token = await _authService.AuthenticateUserByMobile(model.UserId, model.Password);
+            }
             if (token == null)
             {
                 ViewBag.Error = "Sai tài khoản hoặc mật khẩu!";
@@ -43,6 +55,33 @@ namespace Web.Controllers
 
             // Chuyển hướng đến trang Home sau khi đăng nhập thành công
             return RedirectToAction("Index", "Home");
+        }
+        [HttpPost]
+        [AllowAnonymous]
+        public async Task<IActionResult> Signup([FromBody] SigupRequestDto model)
+        {
+            var isResult = true;
+            var token = string.Empty;
+            if (model.isEmail)
+            {
+                 token = await _authService.RegisterUserByEmail(model.Email, model.Password);
+            }
+            else
+            {
+                token = await _authService.RegisterUserByMobile(model.Mobile, model.Password);
+            }
+
+            if (token == null)
+            {
+                isResult = false;
+                ViewBag.Error = "Sai tài khoản hoặc mật khẩu!";
+                return View("Index"); // Hiển thị lại trang login với thông báo lỗi
+            }
+            // Lưu Token vào Cookie (gọi hàm tiện ích)
+            CookieHelper.SetToken(Response, token, Request.IsHttps);
+
+            // Chuyển hướng đến trang Home sau khi đăng nhập thành công
+            return Ok(new { isResult,message = "Verification code sent successfully." });
         }
         [AllowAnonymous]
         public async Task<IActionResult> Logout()
