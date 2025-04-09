@@ -9,6 +9,10 @@ using Microsoft.AspNetCore.Http;
 using HRM.Core.Interfaces;
 using Model.Models.DTOs;
 using Resources;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using System.Security.Claims;
+using Newtonsoft.Json.Linq;
 
 namespace Web.Controllers
 {
@@ -17,11 +21,13 @@ namespace Web.Controllers
         private readonly IAuthService _authService;
         private readonly IValidationHelper _validationHelper;
         private readonly LocalizerService _localizerService;
-        public LoginController(ICommonService commonService, IValidationHelper validationHelper, LocalizerService localizerService)
+        private readonly IPasswordHasher _passwordHasher;
+        public LoginController(ICommonService commonService, IValidationHelper validationHelper, LocalizerService localizerService, IPasswordHasher passwordHasher)
         {
             _authService = commonService.GetService<IAuthService>();
             _validationHelper = validationHelper;
             _localizerService = localizerService;
+            _passwordHasher = passwordHasher;
         }
         public IActionResult Index()
         {
@@ -93,6 +99,44 @@ namespace Web.Controllers
         {
             CookieHelper.RemoveToken(Response); // Xóa Token khỏi Cookie
             return RedirectToAction("Index", "Login");
+        }
+        [HttpGet]
+        public IActionResult GoogleLogin()
+        {
+            var properties = new AuthenticationProperties
+            {
+                RedirectUri = Url.Action("GoogleCallback", "Login", null, Request.Scheme)
+            };
+            return Challenge(properties, "Google");
+        }
+        [HttpGet]
+        public async Task<IActionResult> GoogleCallback()
+        {
+            var result = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+            if (!result.Succeeded)
+                return BadRequest("Google authentication failed");
+            var token = string.Empty;
+            var email = result.Principal.FindFirst(ClaimTypes.Email)?.Value;
+            var name =  result.Principal.Identity.Name;
+            token = await _authService.AuthenticateUserByGoogle(email);
+            if (token == null)
+            {
+                try
+                {
+                    token = await _authService.RegisterUserByGoogle(email, name);
+                }
+                catch {
+                    //ViewBag.Error = "Sai tài khoản hoặc mật khẩu!";
+                    TempData["LoginError"] = _localizerService.GetLocalizedString("Login_Err");
+                    return RedirectToAction("Index", "Login");
+                }
+            }
+            // Lưu Token vào Cookie (gọi hàm tiện ích)
+            CookieHelper.SetToken(Response, token, Request.IsHttps);
+
+            // Chuyển hướng đến trang Home sau khi đăng nhập thành công
+            return RedirectToAction("Index", "Home");
         }
     }
 }

@@ -31,7 +31,7 @@
             <div class="card o-hidden">
                 <div class="row">
                     <div class="col-md-12">
-                        <h4 class="ml-3 mt-3">Create an account</h4>
+                        <h4 class="ml-3 mt-3">@_Localizer.GetLocalizedString("Createanaccount")</h4>
                         <div class="card mb-4">
                             <div class="card-body">
                                 <form id="formSignup" class="needs-validation" novalidate="novalidate">
@@ -41,7 +41,7 @@
                                                 <div class="form-check">
                                                     <input class="form-check-input" id="radioEmail" type="radio" name="radioSendCode" value="1" checked="checked">
                                                     <label class="form-label ms-3" for="radioEmail">
-                                                        Signup with Email
+                                                        @_Localizer.GetLocalizedString("SignupwithEmail")
                                                     </label>
                                                 </div>
                                             </div>
@@ -49,7 +49,7 @@
                                                 <div class="form-check">
                                                     <input class="form-check-input" disabled id="radioMobile" type="radio" name="radioSendCode" value="2">
                                                     <label class="form-label ms-3" for="radioMobile">
-                                                        Signup with Mobile
+                                                        @_Localizer.GetLocalizedString("SignupwithMobile")
                                                     </label>
                                                 </div>
                                             </div>
@@ -59,19 +59,19 @@
                                         <div id="rowEmail" class="col-sm-12">
                                             <label class="col-form-label" for="inputEmail">Email</label>
                                             <input type="email" asp-for="UserEmail" id="inputEmail" class="form-control" placeholder="@_Localizer.GetLocalizedString("Email")" required />
-                                            <div class="invalid-feedback">Please enter a valid email!</div>
+                                            <div class="invalid-feedback">@_Localizer.GetLocalizedString("Pleaseenteravalidemail")</div>
                                         </div>
                                         <div id="rowMobile" class="col-sm-12 d-none">
                                             <label class="col-form-label" for="inputMobile">@_Localizer.GetLocalizedString("Mobile")</label>
                                             <input asp-for="Mobile" id="inputMobile" class="form-control" placeholder="@_Localizer.GetLocalizedString("Mobile")" required />
-                                            <div class="invalid-feedback">Please enter a valid mobile!</div>
+                                            <div class="invalid-feedback">@_Localizer.GetLocalizedString("Pleaseenteravalidmobile")</div>
                                         </div>
                                     </div>
                                     <div class="form-group row" id="rowVerification">
                                         <div class="col-sm-12">
-                                            <label class="col-form-label" for="inputCode">Verification Code</label>
+                                            <label class="col-form-label" for="inputCode">@_Localizer.GetLocalizedString("VerificationCode")</label>
                                             <div class="alert fade show alert-success d-none" id="lblVerifisuccess" role="alert">
-                                                <strong class="text-capitalize">Sending...!</strong>
+                                                <strong class="text-capitalize">@_Localizer.GetLocalizedString("Sending")</strong>
                                             </div>
                                             <input id="inputCode" class="form-control w-100" disabled placeholder="@_Localizer.GetLocalizedString("Code")" required />
                                         </div>
@@ -85,14 +85,14 @@
                                         <div class="col-sm-12">
                                             <label class="col-form-label" for="inputPassword">Password</label>
                                             <input type="password" asp-for="Password" id="inputPassword" class="form-control" placeholder="@_Localizer.GetLocalizedString("Password")" required />
-                                            <div class="invalid-feedback">Please enter a password!</div>
+                                            <div class="invalid-feedback">@_Localizer.GetLocalizedString("PleaseEnterPassword")</div>
                                         </div>
                                     </div>
                                     <div class="form-group row d-none" id="rowconfirmpassword">
                                         <div class="col-sm-12">
                                             <label class="col-form-label" for="inputConfirmPassword">Confirm Password</label>
-                                            <input type="password" asp-for="Password" id="inputConfirmPassword" class="form-control" placeholder="@_Localizer.GetLocalizedString("Confirm Password")" required />
-                                            <div class="invalid-feedback">Password and confirm password must match!</div>
+                                            <input type="password" asp-for="Password" id="inputConfirmPassword" class="form-control" placeholder="@_Localizer.GetLocalizedString("ConfirmPassword")" required />
+                                            <div class="invalid-feedback">@_Localizer.GetLocalizedString("Passwordandconfirmpasswordmustmatch")</div>
                                         </div>
                                     </div>
 
@@ -123,6 +123,11 @@
     <script src="~/js/theme.js"></script>
     <script src="~/js/core/ks.ems.common.js"></script>
     <script src="~/js/core/ks.ems.message.js"></script>
+    <script src="~/js/core/ks.ems.dialog.js"></script>
     <script src="~/scripts/Login/signup.js"></script>
+    <script>
+        const emailExistsMessage = '@_Localizer.GetLocalizedString("EmailExistsErr")';
+        const signupErrorMessage = '@_Localizer.GetLocalizedString("Signuperror")';
+    </script>
 </body>
 </html>

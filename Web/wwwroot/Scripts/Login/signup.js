@@ -99,7 +99,7 @@ class Signup {
                     this.startOtpCountdown();
                 }
                 if (response.isExist) {
-                    window.location.href = "/login/index";
+                    $ksdialog.showConfirm(emailExistsMessage, signupErrorMessage, this.redirectToActionLogin);
                 }
                 else {
                     this.showFormSendCode(response.isResult);
@@ -110,6 +110,9 @@ class Signup {
                 this.showFormSendCode(false);
             }
         });
+    }
+    redirectToActionLogin(confirm) {
+        if (confirm) { window.location.href = "/Login/Index"; }
     }
     verifyOtp() {
         let isEmail = $("input[name='radioSendCode']:checked").val() === '1';

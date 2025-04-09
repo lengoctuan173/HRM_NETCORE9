@@ -23,6 +23,8 @@ public partial class HrmContext : DbContext
 
     public virtual DbSet<Sycuuser> Sycuusers { get; set; }
 
+    public virtual DbSet<Sycuuserauth> Sycuuserauths { get; set; }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
         => optionsBuilder.UseSqlServer("Server=DESKTOP-3KK8MHO\\MSSQLSERVER2;Database=HRM;User Id=sa;Password=123;TrustServerCertificate=True;");
@@ -59,8 +61,10 @@ public partial class HrmContext : DbContext
             entity.ToTable("SYCCCHATMESSAGE");
 
             entity.Property(e => e.ChatId).HasColumnName("CHAT_ID");
+            entity.Property(e => e.FilePath)
+                .HasMaxLength(200)
+                .HasColumnName("FILE_PATH");
             entity.Property(e => e.GroupChatId).HasColumnName("GROUP_CHAT_ID");
-            entity.Property(e => e.FilePath).HasMaxLength(200).HasColumnName("FILE_PATH");
             entity.Property(e => e.Message).HasColumnName("MESSAGE");
             entity.Property(e => e.ReceiverId)
                 .HasMaxLength(50)
@@ -162,6 +166,34 @@ public partial class HrmContext : DbContext
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasColumnName("USER_NAME");
+        });
+
+        modelBuilder.Entity<Sycuuserauth>(entity =>
+        {
+            entity.HasKey(e => e.UserAuthId);
+
+            entity.ToTable("SYCUUSERAUTH");
+
+            entity.Property(e => e.UserAuthId).HasColumnName("USER_AUTH_ID");
+            entity.Property(e => e.CreateDt)
+                .HasColumnType("datetime")
+                .HasColumnName("CREATE_DT");
+            entity.Property(e => e.IsActive).HasColumnName("IS_ACTIVE");
+            entity.Property(e => e.PasswordHash)
+                .HasMaxLength(255)
+                .HasColumnName("PASSWORD_HASH");
+            entity.Property(e => e.Provider).HasColumnName("PROVIDER");
+            entity.Property(e => e.ProviderImage)
+                .HasMaxLength(500)
+                .IsUnicode(false)
+                .HasColumnName("PROVIDER_IMAGE");
+            entity.Property(e => e.ProviderKey)
+                .HasMaxLength(200)
+                .HasColumnName("PROVIDER_KEY");
+            entity.Property(e => e.UserId)
+                .HasMaxLength(64)
+                .IsUnicode(false)
+                .HasColumnName("USER_ID");
         });
 
         OnModelCreatingPartial(modelBuilder);

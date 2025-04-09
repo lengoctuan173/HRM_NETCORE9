@@ -9,6 +9,7 @@ using Data.Implementations;
 using Data.Interfaces;
 using HRM.Core.Implementations;
 using HRM.Core.Interfaces;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
@@ -43,10 +44,12 @@ builder.Services.AddAuthentication(options =>
 {
     // Thiết lập cơ chế xác thực mặc định là JWT
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-
     // Thiết lập cơ chế thử thách mặc định là JWT (khi không có quyền truy cập, sẽ yêu cầu xác thực bằng JWT)
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    // ✅ Thêm dòng này để login với Google hoạt động
+    options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
 })
+.AddCookie()
 // Cấu hình JwtBearer (JWT Authentication)
 .AddJwtBearer(options =>
 {
@@ -96,7 +99,13 @@ builder.Services.AddAuthentication(options =>
             return Task.CompletedTask;
         }
     };
-});
+})
+.AddGoogle("Google", options =>
+ {
+     options.ClientId = builder.Configuration["Google:ClientId"];
+     options.ClientSecret = builder.Configuration["Google:ClientSecret"];
+     options.CallbackPath = builder.Configuration["Google:CallbackPath"];
+ });
 builder.Services.AddHttpContextAccessor(); // lấy thông tin user, session, request headers từ bất kỳ đâu trong ứng dụng.
 // Đăng ký Authorization
 builder.Services.AddAuthorization();
