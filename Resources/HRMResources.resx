@@ -144,4 +144,52 @@
   <data name="Signupwith" xml:space="preserve">
     <value>Signup with</value>
   </data>
+  <data name="Send" xml:space="preserve">
+    <value>Send</value>
+  </data>
+  <data name="Verify" xml:space="preserve">
+    <value>Verify</value>
+  </data>
+  <data name="Resend" xml:space="preserve">
+    <value>Resend</value>
+  </data>
+  <data name="ConfirmPassword" xml:space="preserve">
+    <value>Confirm Password</value>
+  </data>
+  <data name="PleaseEnterPassword" xml:space="preserve">
+    <value>Please enter a password</value>
+  </data>
+  <data name="Passwordandconfirmpasswordmustmatch" xml:space="preserve">
+    <value>Password and confirm password must match.</value>
+  </data>
+  <data name="Code" xml:space="preserve">
+    <value>OTP</value>
+  </data>
+  <data name="VerificationCode" xml:space="preserve">
+    <value>Verification Code</value>
+  </data>
+  <data name="Sending" xml:space="preserve">
+    <value>Sending...!</value>
+  </data>
+  <data name="Pleaseenteravalidemail" xml:space="preserve">
+    <value>Please enter a valid email</value>
+  </data>
+  <data name="Pleaseenteravalidmobile" xml:space="preserve">
+    <value>Please enter a valid mobile</value>
+  </data>
+  <data name="SignupwithEmail" xml:space="preserve">
+    <value>Signup with Email</value>
+  </data>
+  <data name="SignupwithMobile" xml:space="preserve">
+    <value>Signup with Mobile</value>
+  </data>
+  <data name="Createanaccount" xml:space="preserve">
+    <value>Create an account</value>
+  </data>
+  <data name="Signuperror" xml:space="preserve">
+    <value>Signup error</value>
+  </data>
+  <data name="EmailExistsErr" xml:space="preserve">
+    <value>Email has been registered in the system, please return to the login page!</value>
+  </data>
 </root>

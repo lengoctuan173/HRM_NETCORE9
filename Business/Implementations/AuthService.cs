@@ -51,6 +51,15 @@ namespace Business.Implementations
             }
             return _jwtHelper.GenerateToken(user.UserId, "admin", user.UserName, user.ImagePath);
         }
+        public async Task<string> AuthenticateUserByGoogle(string email)
+        {
+            var user = await _authRepository.GetUserByGoogleAsync(email);
+            if (user == null)
+            {
+                return null; // Sai mật khẩu hoặc không tìm thấy user
+            }
+            return _jwtHelper.GenerateToken(user.UserAuthId.ToString(), "admin", user.ProviderKey, user.ProviderImage);
+        }
         public async Task<string> RegisterUserByMobile(string mobile, string password)
         {
             var user = await _authRepository.RegisterUserByMobile(mobile, password);
@@ -69,6 +78,15 @@ namespace Business.Implementations
             }
             return _jwtHelper.GenerateToken(user.UserId, "admin", user.UserName, user.ImagePath);
         }
+        public async Task<string> RegisterUserByGoogle(string email, string name)
+        {
+            var user = await _authRepository.RegisterUserByGoogle(email, name);
+            if (user == null)
+            {
+                return null; // Sai mật khẩu hoặc không tìm thấy user
+            }
+            return _jwtHelper.GenerateToken(user.UserAuthId.ToString(), "admin", user.ProviderKey, user.ProviderImage);
+        }
         public async Task<bool> isExistUserByEmail(string email)
         {
             var user = await _authRepository.GetUserByEmailAsync(email);
@@ -78,6 +96,11 @@ namespace Business.Implementations
         {
             var user = await _authRepository.GetUserByMobileAsync(mobile);
             return user != null;
+        }
+        public async Task<Sycuuser> getUserByEmail(string email)
+        {
+            var user = await _authRepository.GetUserByEmailAsync(email);
+            return user;
         }
     }
 }
