@@ -31,6 +31,8 @@ namespace HRM.Core.Implementations
 
         public bool VerifyPassword(string hashedPassword, string inputPassword)
         {
+            if (string.IsNullOrWhiteSpace(hashedPassword) || string.IsNullOrWhiteSpace(inputPassword))
+                return false;
             var parts = hashedPassword.Split('.');
             if (parts.Length != 2) return false;
 
