@@ -3,6 +3,34 @@
 var connection = new signalR.HubConnectionBuilder().withUrl("/chatHub").build();
 // Vô hiệu hóa nút gửi khi chưa kết nối
 document.getElementById("sendButton").disabled = true;
+
+// Định nghĩa CallState
+const CallState = {
+    IDLE: 'idle',
+    CALLING: 'calling',
+    IN_CALL: 'in_call',
+    ENDING: 'ending'
+};
+
+let currentCallState = CallState.IDLE;
+
+// Thêm biến để theo dõi người gọi
+let currentCallerId = null;
+
+// Hàm gửi tín hiệu cuộc gọi (offer, answer, end)
+function sendCallSignal(receiverId, signalType, signalData) {
+    let senderId = document.getElementById("currentUser").value;
+    console.log("Gửi tín hiệu cuộc gọi:", senderId, receiverId, signalType, signalData);
+
+    connection.invoke("SendCallSignal", senderId, receiverId, signalType, signalData)
+        .then(() => {
+            console.log("✅ Tín hiệu cuộc gọi đã được gửi thành công.");
+        })
+        .catch(function (err) {
+            console.error("❌ Lỗi gửi tín hiệu cuộc gọi:", err.toString());
+        });
+}
+
 function createMessageElement(messageObj, isCurrentUser, isFileMessage = false) {
     let messageDiv = document.createElement("div");
     messageDiv.classList.add("d-flex", "mb-4", isCurrentUser && "user");
@@ -73,8 +101,8 @@ connection.on("UpdateUserList", function (allUsers, onlineUsers) {
                 <div class="p-3 d-flex border-bottom align-items-center contact ${isOnline ? "online" : ""}" 
                     data-userid="${user.userId}" data-username="${user.userName}">
                      <img class="avatar-sm rounded-circle me-3" src="${avatarPath}" alt="${user.userName}">
-                     <div>
-                      <h6>${user.userName}</h6>
+                     <div class="m-1">
+                      <h6 class="m-0">${user.userName}</h6>
                      </div>
                 </div>
             `;
@@ -148,10 +176,16 @@ function handleContactClick(target) {
     let selectedUserId = target.getAttribute("data-userid");
     let selectedUserAvatar = target.querySelector("img").getAttribute("src");
     let chatTopbar = document.querySelector(".chat-topbar .d-flex.align-items-center");
+    let callTopbar = document.querySelector(".chat-topbar .d-flex.align-items-end");
     chatTopbar.innerHTML = `
         <img class="avatar-sm rounded-circle me-2" src="${selectedUserAvatar}" alt="${selectedUser}">
         <p class="m-0 text-title text-16 flex-grow-1">${selectedUser}</p>
     `;
+    callTopbar.innerHTML = `
+         <button class="btn btn-sm btn-outline-primary ms-auto startCallButton">
+             <i class="i-Phone"></i> Call
+         </button>
+    `
     document.querySelector(".chat-content").innerHTML = "";
     document.getElementById("messageInput").focus();
     document.getElementById("selectedUser").value = selectedUserId;
@@ -261,9 +295,45 @@ connection.on("ReceiveFileMessage", function (fileMessage) {
 //CALLL
 let callAccepted = false;  // Biến kiểm tra xem cuộc gọi đã được chấp nhận hay chưa
 // Khi nhấn nút gọi điện
-document.querySelector(".startCallButton").addEventListener("click", function () {
-    let receiverId = document.getElementById("selectedUser").value;
-    sendCallSignal(receiverId, "offer", { senderName: document.getElementById("currentUser").getAttribute("data-username") });
+document.addEventListener("click", async function (event) {
+    if (event.target.matches(".startCallButton")) {
+        const currentUser = document.getElementById("currentUser").value;
+        const receiverId = document.getElementById("selectedUser").value;
+        
+        try {
+            // Khởi tạo peer connection cho người gọi
+            await initializePeerConnection(receiverId);
+            
+            // Tạo offer
+            const offer = await peerConnection.createOffer({
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true
+            });
+            
+            // Set local description
+            await peerConnection.setLocalDescription(offer);
+            
+            // Đặt người gọi là user hiện tại
+            currentCallerId = currentUser;
+            
+            console.log("Bắt đầu cuộc gọi từ:", currentUser, "đến:", receiverId);
+            
+            // Gửi offer đến người nhận
+            sendCallSignal(receiverId, "offer", {
+                type: 'offer',
+                sdp: offer.sdp,
+                senderName: document.getElementById("currentUser").getAttribute("data-username")
+            });
+
+            // Cập nhật UI
+            updateCallState(CallState.CALLING);
+            document.getElementById("call-interface").style.display = 'block';
+            
+        } catch (error) {
+            console.error("Lỗi khi bắt đầu cuộc gọi:", error);
+            handleCallError(error, 'startCall');
+        }
+    }
 });
 document.getElementById("endCallButton").addEventListener("click", function () {
     let currentUser = document.getElementById("currentUser")?.value;
@@ -275,176 +345,699 @@ function resetCallUI() {
     document.getElementById("incoming-call").style.display = 'none';  // Ẩn giao diện cuộc gọi đến
     document.getElementById("call-interface").style.display = 'none'; // Ẩn giao diện đang gọi
 }
-// Lắng nghe tín hiệu gọi điện đến
-connection.on("ReceiveCallSignal", function (senderId, signalType, signalData) {
-    if (callAccepted) return;  // Nếu cuộc gọi đã được chấp nhận, không xử lý tín hiệu mới
-    console.log("Tín hiệu cuộc gọi nhận được:", senderId, signalType, signalData);
-    if (signalType === "offer") {
-        // Hiển thị modal khi có cuộc gọi đến
-        $('#callModal').modal('show');
-        handleIncomingCall(senderId, signalData);
-    } else if (signalType === "answer") {
-        handleCallAnswer(senderId, signalData);
-    } else if (signalType === "end") {
-        endCall(senderId);
+// Thêm các biến quản lý state
+let incomingCallTimeout = null;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 3;
+const CALL_TIMEOUT = 30000; // 30 giây
+
+// Thêm biến quản lý thời gian cuộc gọi
+let callTimer = null;
+let callDuration = 0;
+
+// Hàm cập nhật thời gian cuộc gọi
+function updateCallTimer() {
+    const timerElement = document.getElementById('callTimer');
+    if (!timerElement) return;
+
+    callDuration++;
+    const minutes = Math.floor(callDuration / 60);
+    const seconds = callDuration % 60;
+    timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+// Hàm bắt đầu đếm thời gian cuộc gọi
+function startCallTimer() {
+    const timerElement = document.getElementById('callTimer');
+    if (timerElement) {
+        timerElement.style.display = 'inline';
+        callDuration = 0;
+        callTimer = setInterval(updateCallTimer, 1000);
+    }
+}
+
+// Hàm dừng đếm thời gian
+function stopCallTimer() {
+    if (callTimer) {
+        clearInterval(callTimer);
+        callTimer = null;
+    }
+    const timerElement = document.getElementById('callTimer');
+    if (timerElement) {
+        timerElement.style.display = 'none';
+        timerElement.textContent = '00:00';
+    }
+    callDuration = 0;
+}
+
+// Hàm cập nhật đếm ngược cho cuộc gọi đến
+function updateIncomingCallTimeout() {
+    const timeoutCounter = document.getElementById('timeoutCounter');
+    if (!timeoutCounter) return;
+
+    let timeLeft = parseInt(timeoutCounter.textContent);
+    if (timeLeft > 0) {
+        timeoutCounter.textContent = (timeLeft - 1).toString();
+    }
+}
+
+// Xử lý bật/tắt micro
+let isMicMuted = false;
+document.getElementById('toggleMicButton').addEventListener('click', function() {
+    const micButton = this;
+    const micIcon = micButton.querySelector('i');
+    const localStream = document.getElementById('localVideo').srcObject;
+
+    if (localStream) {
+        const audioTracks = localStream.getAudioTracks();
+        if (audioTracks.length > 0) {
+            isMicMuted = !isMicMuted;
+            audioTracks[0].enabled = !isMicMuted;
+            
+            // Cập nhật UI
+            micIcon.className = isMicMuted ? 'fas fa-microphone-slash' : 'fas fa-microphone';
+            micButton.classList.toggle('btn-danger', isMicMuted);
+            micButton.classList.toggle('btn-outline-secondary', !isMicMuted);
+        }
     }
 });
 
-// Hàm gửi tín hiệu cuộc gọi (offer, answer, end)
-function sendCallSignal(receiverId, signalType, signalData) {
-    let senderId = document.getElementById("currentUser").value;
-    console.log("Gửi tín hiệu cuộc gọi:", senderId, receiverId, signalType, signalData);
+// Xử lý bật/tắt loa
+let isSpeakerMuted = false;
+document.getElementById('toggleSpeakerButton').addEventListener('click', function() {
+    const speakerButton = this;
+    const speakerIcon = speakerButton.querySelector('i');
+    const remoteVideo = document.getElementById('remoteVideo');
 
-    connection.invoke("SendCallSignal", senderId, receiverId, signalType, signalData)
-        .then(() => {
-            console.log("✅ Tín hiệu cuộc gọi đã được gửi thành công.");
-        })
-        .catch(function (err) {
-            console.error("❌ Lỗi gửi tín hiệu cuộc gọi:", err.toString());
-        });
+    isSpeakerMuted = !isSpeakerMuted;
+    remoteVideo.muted = isSpeakerMuted;
+    
+    // Cập nhật UI
+    speakerIcon.className = isSpeakerMuted ? 'fas fa-volume-mute' : 'fas fa-volume-up';
+    speakerButton.classList.toggle('btn-danger', isSpeakerMuted);
+    speakerButton.classList.toggle('btn-outline-secondary', !isSpeakerMuted);
+});
+
+// Cập nhật hàm updateCallUI để xử lý UI mới
+function updateCallUI(state) {
+    const callError = document.getElementById('callError');
+    const connectionStatus = document.getElementById('connectionStatus');
+    const callInterface = document.getElementById('call-interface');
+    const incomingCall = document.getElementById('incoming-call');
+    const statusMessage = document.getElementById('statusMessage');
+
+    switch(state) {
+        case CallState.IDLE:
+            callInterface.style.display = 'none';
+            incomingCall.style.display = 'none';
+            connectionStatus.style.display = 'none';
+            stopCallTimer();
+            break;
+
+        case CallState.CALLING:
+            callInterface.style.display = 'block';
+            connectionStatus.style.display = 'block';
+            statusMessage.textContent = 'Đang kết nối cuộc gọi...';
+            break;
+
+        case CallState.IN_CALL:
+            callInterface.style.display = 'block';
+            incomingCall.style.display = 'none';
+            connectionStatus.style.display = 'none';
+            startCallTimer();
+            break;
+
+        case CallState.ENDING:
+            connectionStatus.style.display = 'block';
+            statusMessage.textContent = 'Đang kết thúc cuộc gọi...';
+            break;
+    }
 }
 
-// Xử lý cuộc gọi đến (Offer)
-function handleIncomingCall(senderId, offerData) {
-    let callerName = offerData.senderName ?? document.getElementById("selectedUser").getAttribute("data-username");
-    document.getElementById("callerName").textContent = `${callerName} đang gọi cho bạn.`;
+// Cập nhật hàm handleCallError để sử dụng alert mới
+function handleCallError(error, context) {
+    console.error(`Lỗi trong ${context}:`, error);
+    
+    const errorDiv = document.getElementById('callError');
+    const errorMessage = document.getElementById('errorMessage');
+    
+    let message = 'Đã xảy ra lỗi trong cuộc gọi';
+    switch(error.name) {
+        case 'NotAllowedError':
+            message = 'Vui lòng cho phép truy cập microphone/camera trong trình duyệt của bạn';
+            break;
+        case 'NotFoundError':
+            message = 'Không tìm thấy thiết bị media (microphone/camera). Vui lòng kiểm tra kết nối thiết bị của bạn';
+            break;
+        case 'NotReadableError':
+            message = 'Thiết bị media đang được sử dụng bởi ứng dụng khác';
+            break;
+        case 'ConnectionError':
+            message = 'Lỗi kết nối mạng';
+            break;
+        default:
+            message = `Lỗi: ${error.message || 'Không xác định'}`;
+    }
+    
+    errorMessage.textContent = message;
+    errorDiv.style.display = 'block';
+    
+    // Tự động ẩn thông báo lỗi sau 5 giây
+    setTimeout(() => {
+        errorDiv.style.display = 'none';
+    }, 5000);
+    
+    endCall();
+}
 
-    // Tạo lại nút để tránh sự kiện click bị gán nhiều lần
-    let acceptButton = document.getElementById("acceptCallButton");
-    let newAcceptButton = acceptButton.cloneNode(true);
-    acceptButton.replaceWith(newAcceptButton);
+// Thêm hàm để xử lý audio level indicator
+function setupAudioLevelIndicator(stream, elementId) {
+    if (!stream) return;
 
-    let rejectButton = document.getElementById("rejectCallButton");
-    let newRejectButton = rejectButton.cloneNode(true);
-    rejectButton.replaceWith(newRejectButton);
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const analyser = audioContext.createAnalyser();
+    const microphone = audioContext.createMediaStreamSource(stream);
+    microphone.connect(analyser);
+    
+    analyser.fftSize = 256;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    
+    const indicator = document.querySelector(`#${elementId} .audio-indicator`);
+    if (!indicator) return;
 
-    // Gán sự kiện mới
-    newAcceptButton.addEventListener("click", function () {
-        if (!callAccepted) {  // Kiểm tra nếu chưa chấp nhận cuộc gọi
-            sendCallSignal(senderId, "answer", { receiverId: document.getElementById("currentUser").value });
-            startCall(senderId);
-
-            // Đánh dấu cuộc gọi đã được chấp nhận
-            callAccepted = true;
-
-            // Chuyển modal sang chế độ cuộc gọi
-            document.getElementById("incoming-call").style.display = 'none';
-            document.getElementById("call-interface").style.display = 'block';
-          /*  $('#callModal').modal('hide');  // Ẩn modal sau khi chấp nhận cuộc gọi*/
+    function updateAudioLevel() {
+        analyser.getByteFrequencyData(dataArray);
+        let values = 0;
+        const length = dataArray.length;
+        for (let i = 0; i < length; i++) {
+            values += dataArray[i];
         }
-    });
-
-    newRejectButton.addEventListener("click", function () {
-        sendCallSignal(senderId, "end", null);
-        closeModal(); // Chỉ đóng modal khi từ chối cuộc gọi
-    });
-
-    // Hiển thị phần giao diện cuộc gọi đến
-    document.getElementById("incoming-call").style.display = 'block';
-    document.getElementById("call-interface").style.display = 'none';
+        const average = values / length;
+        
+        // Cập nhật màu sắc dựa trên mức độ âm thanh
+        if (average > 50) {
+            indicator.style.backgroundColor = '#4CAF50'; // Xanh lá khi có tiếng nói
+        } else if (average > 20) {
+            indicator.style.backgroundColor = '#FFC107'; // Vàng khi có âm thanh nhỏ
+        } else {
+            indicator.style.backgroundColor = '#757575'; // Xám khi im lặng
+        }
+        
+        requestAnimationFrame(updateAudioLevel);
+    }
+    
+    updateAudioLevel();
 }
 
-// Xử lý trả lời cuộc gọi (Answer)
-function handleCallAnswer(senderId, answerData) {
-    startCall(senderId);
-}
+// Cập nhật hàm initializePeerConnection
+async function initializePeerConnection(senderId) {
+    console.log("Khởi tạo peer connection với:", senderId);
+    
+    // Đóng kết nối cũ nếu có
+    if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+    }
 
-// Bắt đầu cuộc gọi (Khởi tạo WebRTC hoặc giao diện gọi)
-let peerConnection = null;  // Đảm bảo khai báo ở phạm vi toàn cục
-function startCall(senderId) {
-    console.log("Bắt đầu cuộc gọi với ID:", senderId);
-    // Giao diện cuộc gọi đã được mở, bắt đầu WebRTC và giao diện video
-    console.log("Bắt đầu cuộc gọi với ID:", senderId);
-
-    document.getElementById("call-interface").style.display = 'block';  // Hiển thị giao diện cuộc gọi
-    document.getElementById("incoming-call").style.display = 'none';    // Ẩn giao diện cuộc gọi đến
-    // Thực hiện khởi tạo WebRTC (cấu hình ICE servers)
     const configuration = {
         iceServers: [
             { urls: 'stun:stun.l.google.com:19302' }
         ]
     };
+
     peerConnection = new RTCPeerConnection(configuration);
-    // Thiết lập các sự kiện của WebRTC (ontrack, onicecandidate...)
+
+    // Xử lý ICE candidate
     peerConnection.onicecandidate = function (event) {
         if (event.candidate) {
-            sendSignal('candidate', event.candidate);
+            console.log("Gửi ICE candidate đến:", senderId);
+            sendCallSignal(senderId, "candidate", event.candidate);
+        }
+    };
+
+    // Xử lý kết nối ICE state
+    peerConnection.oniceconnectionstatechange = function() {
+        console.log("ICE connection state:", peerConnection.iceConnectionState);
+        switch (peerConnection.iceConnectionState) {
+            case 'connected':
+                // Khi kết nối thành công, hiển thị giao diện cuộc gọi cho cả hai bên
+                $('#callModal').modal('show');
+                document.getElementById("incoming-call").style.display = 'none';
+                document.getElementById("call-interface").style.display = 'block';
+                document.getElementById("connectionStatus").style.display = 'none';
+                updateCallState(CallState.IN_CALL);
+                startCallTimer();
+                break;
+            case 'disconnected':
+                console.log('Kết nối ICE bị ngắt');
+                endCall();
+                break;
+            case 'failed':
+                console.log('Kết nối ICE thất bại');
+                handleCallError(new Error('Kết nối cuộc gọi thất bại'), 'iceConnection');
+                endCall();
+                break;
         }
     };
 
     peerConnection.ontrack = function (event) {
-        // Khi có video/audio track từ peer, hiển thị nó lên giao diện
+        console.log("Nhận track từ peer");
         let remoteStream = event.streams[0];
         document.getElementById("remoteVideo").srcObject = remoteStream;
+        
+        // Thiết lập audio indicator cho remote video
+        setupAudioLevelIndicator(remoteStream, "remoteVideo");
     };
 
-    // Giao diện cuộc gọi (hiển thị cửa sổ cuộc gọi)
-    document.getElementById('call-interface').style.display = 'block';
-    document.getElementById('incoming-call').style.display = 'none'; // Ẩn thông báo cuộc gọi đến
-
-    //Truyền video/audio stream của người gọi vào peerConnection
-    navigator.mediaDevices.getUserMedia({ video: false, audio: true })
-        .then(function (stream) {
-            // Gửi stream của người gọi vào peerConnection
+    try {
+        // Thử lấy cả audio và video
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+                video: true
+            });
             stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
-
-            // Hiển thị stream của người gọi lên giao diện
             document.getElementById("localVideo").srcObject = stream;
+            
+            // Thiết lập audio indicator cho local video
+            setupAudioLevelIndicator(stream, "localVideo");
+        } catch (videoError) {
+            console.log("Không thể lấy video, thử chỉ lấy audio:", videoError);
+            const audioStream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+                video: false
+            });
+            audioStream.getTracks().forEach(track => peerConnection.addTrack(track, audioStream));
+            const localVideo = document.getElementById("localVideo");
+            localVideo.srcObject = audioStream;
+            localVideo.style.backgroundColor = "#333";
+            localVideo.style.display = "flex";
+            localVideo.style.alignItems = "center";
+            localVideo.style.justifyContent = "center";
+            
+            // Thiết lập audio indicator cho local video (audio only)
+            setupAudioLevelIndicator(audioStream, "localVideo");
+            
+            // Thêm icon microphone
+            const micIcon = document.createElement("i");
+            micIcon.className = "fas fa-microphone fa-3x text-white";
+            localVideo.appendChild(micIcon);
+        }
+    } catch (error) {
+        console.error("Không thể truy cập thiết bị media:", error);
+        showNotification('Không thể truy cập micro hoặc camera. Vui lòng kiểm tra quyền truy cập thiết bị.', 'warning');
+        throw error;
+    }
 
-            // Tạo offer và gửi
-            peerConnection.createOffer()
-                .then(offer => peerConnection.setLocalDescription(offer))
-                .then(() => {
-                    sendSignal('offer', peerConnection.localDescription);
-                })
-                .catch(error => console.error("❌ Lỗi tạo offer:", error));
-        })
-        .catch(function (error) {
-            console.error("❌ Lỗi truy cập camera/microphone:", error);
-        });
+    return peerConnection;
 }
 
-// Kết thúc cuộc gọi
-function endCall(callerId) {
-    console.log("Cuộc gọi kết thúc với ID:", callerId);
+// Thêm CSS cho audio indicator
+const style = document.createElement('style');
+style.textContent = `
+    .audio-indicator {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background-color: #757575;
+        transition: background-color 0.2s ease;
+    }
+    
+    .audio-indicator.active {
+        background-color: #4CAF50;
+    }
+`;
+document.head.appendChild(style);
 
-    // 🛑 Dừng tất cả tracks trong local video
-    let localVideo = document.getElementById("localVideo");
+// Thêm hàm kiểm tra SDP
+function isValidSDP(sdp) {
+    if (!sdp || typeof sdp !== 'string') {
+        console.error("SDP không hợp lệ:", sdp);
+        return false;
+    }
+    return sdp.includes('v=0');
+}
+
+// Cập nhật hàm startCall
+async function startCall(senderId) {
+    console.log("Bắt đầu cuộc gọi với ID:", senderId);
+    updateCallState(CallState.CALLING);
+
+    try {
+        await initializePeerConnection(senderId);
+
+        // Tạo và gửi offer nếu là người gọi
+        if (currentCallerId === document.getElementById("currentUser").value) {
+            console.log("Tạo và gửi offer");
+            const offer = await peerConnection.createOffer({
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true
+            });
+            
+            console.log("Offer created:", offer);
+            await peerConnection.setLocalDescription(offer);
+            
+            // Đợi cho đến khi local description được set
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            
+            const offerData = {
+                type: offer.type,
+                sdp: peerConnection.localDescription.sdp,
+                senderName: document.getElementById("currentUser").getAttribute("data-username")
+            };
+            
+            console.log("Sending offer data:", offerData);
+            sendCallSignal(senderId, "offer", offerData);
+        }
+
+        // Hiển thị modal và giao diện chờ kết nối cho người gọi
+        $('#callModal').modal('show');
+        document.getElementById("call-interface").style.display = 'block';
+        document.getElementById("connectionStatus").style.display = 'block';
+        document.getElementById("statusMessage").textContent = 'Đang kết nối cuộc gọi...';
+        document.getElementById("incoming-call").style.display = 'none';
+    } catch (error) {
+        console.error("Lỗi trong startCall:", error);
+        handleCallError(error, 'startCall');
+    }
+}
+
+function updateCallState(newState) {
+    console.log(`Chuyển trạng thái cuộc gọi: ${currentCallState} -> ${newState}`);
+    currentCallState = newState;
+    updateCallUI(newState);
+}
+
+function cleanupCall() {
+    // Dọn dẹp media streams
     if (localVideo.srcObject) {
-        localVideo.srcObject.getTracks().forEach(track => track.stop());
+        localVideo.srcObject.getTracks().forEach(track => {
+            track.stop();
+        });
         localVideo.srcObject = null;
     }
-
-    // 🛑 Dừng tất cả tracks trong remote video
-    let remoteVideo = document.getElementById("remoteVideo");
-    if (remoteVideo.srcObject) {
-        remoteVideo.srcObject.getTracks().forEach(track => track.stop());
-        remoteVideo.srcObject = null;
-    }
-
-    // 🛑 Xóa ICE Candidates (chỉ thực hiện nếu connection còn tồn tại)
+    
+    // Dọn dẹp peer connection
     if (peerConnection) {
-        peerConnection.onicecandidate = null;
-        peerConnection.ontrack = null;
-        peerConnection.oniceconnectionstatechange = null;
-        peerConnection.ondatachannel = null;
-
-        // Đóng và giải phóng connection
         peerConnection.close();
         peerConnection = null;
     }
-
-    // Reset trạng thái cuộc gọi
+    
+    // Reset state
+    updateCallState(CallState.IDLE);
     callAccepted = false;
-
-    // Reset giao diện video
-    resetCallUI();
-
-    // Đóng modal
-    closeModal();
 }
 
-// Gửi tín hiệu WebRTC (candidate, answer...) qua SignalR
+// Thêm hàm hiển thị thông báo
+function showNotification(message, type = 'info') {
+    const notificationDiv = document.createElement('div');
+    notificationDiv.className = `alert alert-${type} notification-alert`;
+    notificationDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        padding: 15px;
+        border-radius: 4px;
+        animation: slideIn 0.5s ease-in-out;
+    `;
+    
+    notificationDiv.innerHTML = `
+        <i class="fas ${type === 'info' ? 'fa-info-circle' : 'fa-exclamation-circle'}"></i>
+        <span class="ml-2">${message}</span>
+    `;
+    
+    document.body.appendChild(notificationDiv);
+    
+    // Thêm style animation
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideIn {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    // Tự động ẩn sau 3 giây
+    setTimeout(() => {
+        notificationDiv.style.animation = 'fadeOut 0.5s ease-in-out';
+        setTimeout(() => {
+            document.body.removeChild(notificationDiv);
+        }, 500);
+    }, 3000);
+}
+
+// Cập nhật lại hàm xử lý tín hiệu cuộc gọi
+connection.on("ReceiveCallSignal", async function (senderId, signalType, signalData) {
+    console.log("Tín hiệu cuộc gọi nhận được:", senderId, signalType, signalData);
+    console.log("Trạng thái cuộc gọi hiện tại:", currentCallState);
+    console.log("Người gọi hiện tại:", currentCallerId);
+    
+    try {
+        switch (signalType) {
+            case "offer":
+                // Nếu là người đã bắt đầu cuộc gọi, bỏ qua offer
+                if (currentCallerId === document.getElementById("currentUser").value) {
+                    console.log("Bỏ qua offer vì đây là người gọi");
+                    return;
+                }
+                
+                if (currentCallState === CallState.IN_CALL && callAccepted) {
+                    console.log("Từ chối cuộc gọi mới vì đang trong cuộc gọi khác");
+                    sendCallSignal(senderId, "busy", null);
+                } else {
+                    console.log("Hiển thị cuộc gọi đến từ:", senderId);
+                    currentCallerId = senderId; // Lưu ID người gọi
+                    handleIncomingCall(senderId, signalData);
+                }
+                break;
+                
+            case "answer":
+                console.log("Nhận tín hiệu answer từ:", senderId);
+                if (currentCallState === CallState.CALLING || currentCallState === CallState.IDLE) {
+                    await handleCallAnswer(senderId, signalData);
+                    updateCallState(CallState.IN_CALL);
+                    document.getElementById("call-interface").style.display = 'block';
+                    startCallTimer();
+                }
+                break;
+                
+            case "candidate":
+                console.log("Nhận ICE candidate từ:", senderId);
+                if (peerConnection && (currentCallState === CallState.CALLING || currentCallState === CallState.IN_CALL)) {
+                    try {
+                        await peerConnection.addIceCandidate(new RTCIceCandidate(signalData));
+                        console.log("Đã thêm ICE candidate");
+                    } catch (error) {
+                        console.error("Lỗi khi thêm ICE candidate:", error);
+                    }
+                } else {
+                    console.log("Bỏ qua candidate vì không trong cuộc gọi hoặc chưa có peerConnection");
+                }
+                break;
+                
+            case "end":
+                console.log("Nhận tín hiệu kết thúc từ:", senderId);
+                endCall(senderId);
+                currentCallerId = null;
+                break;
+                
+            case "busy":
+                console.log("Người dùng đang bận");
+                showNotification('Người dùng đang trong cuộc gọi khác. Vui lòng thử lại sau.', 'warning');
+                endCall();
+                break;
+                
+            case "timeout":
+                console.log("Cuộc gọi hết thời gian");
+                showNotification('Cuộc gọi đã hết thời gian chờ.', 'warning');
+                endCall();
+                break;
+                
+            case "reject":
+                console.log("Cuộc gọi bị từ chối");
+                showNotification('Cuộc gọi đã bị từ chối.', 'info');
+                endCall();
+                break;
+                
+            case "reconnect-offer":
+                console.log("Nhận tín hiệu reconnect từ:", senderId);
+                handleReconnectOffer(senderId, signalData);
+                break;
+        }
+    } catch (error) {
+        console.error("Lỗi xử lý tín hiệu cuộc gọi:", error);
+        handleCallError(error, 'receiveCallSignal');
+    }
+});
+
+// Cập nhật hàm handleIncomingCall
+async function handleIncomingCall(senderId, offerData) {
+    console.log("Xử lý cuộc gọi đến từ:", senderId, "State hiện tại:", currentCallState);
+    console.log("Offer data received:", offerData);
+
+    try {
+        // Cập nhật UI cuộc gọi đến
+        let callerName = offerData.senderName ?? "Unknown User";
+        document.getElementById("callerName").textContent = callerName;
+        
+        // Hiển thị giao diện cuộc gọi đến
+        document.getElementById("incoming-call").style.display = 'block';
+        document.getElementById("call-interface").style.display = 'none';
+        document.getElementById("acceptCallButton").style.display = 'inline-block';
+        document.getElementById("rejectCallButton").style.display = 'inline-block';
+
+        // Hiển thị modal
+        $('#callModal').modal('show');
+
+        updateCallState(CallState.CALLING);
+        callAccepted = false;
+
+        // Xóa timeout cũ nếu có
+        if (incomingCallTimeout) {
+            clearTimeout(incomingCallTimeout);
+        }
+
+        // Set timeout mới
+        incomingCallTimeout = setTimeout(() => {
+            if (!callAccepted) {
+                console.log("Cuộc gọi hết thời gian chờ");
+                sendCallSignal(senderId, "timeout", null);
+                closeModal();
+                updateCallState(CallState.IDLE);
+                currentCallerId = null;
+            }
+        }, CALL_TIMEOUT);
+
+        // Xóa event listeners cũ
+        const acceptButton = document.getElementById("acceptCallButton");
+        const rejectButton = document.getElementById("rejectCallButton");
+        
+        const newAcceptButton = acceptButton.cloneNode(true);
+        const newRejectButton = rejectButton.cloneNode(true);
+        
+        acceptButton.parentNode.replaceChild(newAcceptButton, acceptButton);
+        rejectButton.parentNode.replaceChild(newRejectButton, rejectButton);
+
+        // Thêm event listeners mới
+        newAcceptButton.addEventListener("click", async function () {
+            try {
+                console.log("Chấp nhận cuộc gọi từ:", senderId);
+                if (!callAccepted) {
+                    clearTimeout(incomingCallTimeout);
+                    callAccepted = true;
+
+                    // Khởi tạo peer connection khi chấp nhận cuộc gọi
+                    await initializePeerConnection(senderId);
+
+                    // Kiểm tra và set remote description từ offer
+                    if (offerData && offerData.type === 'offer' && offerData.sdp) {
+                        console.log("Setting remote description from offer");
+                        await peerConnection.setRemoteDescription(new RTCSessionDescription({
+                            type: 'offer',
+                            sdp: offerData.sdp
+                        }));
+                        
+                        // Tạo answer
+                        console.log("Creating answer");
+                        const answer = await peerConnection.createAnswer();
+                        
+                        // Set local description
+                        console.log("Setting local description");
+                        await peerConnection.setLocalDescription(answer);
+                        
+                        // Gửi answer về cho người gọi
+                        console.log("Sending answer");
+                        await sendCallSignal(senderId, "answer", {
+                            type: 'answer',
+                            sdp: answer.sdp
+                        });
+                        
+                        // KHÔNG đóng modal ở đây, để đợi ICE connection thành công
+                    } else {
+                        throw new Error("Invalid offer data received");
+                    }
+                }
+            } catch (error) {
+                console.error("Lỗi khi chấp nhận cuộc gọi:", error);
+                handleCallError(error, 'acceptCall');
+            }
+        });
+
+        newRejectButton.addEventListener("click", function () {
+            console.log("Từ chối cuộc gọi từ:", senderId);
+            clearTimeout(incomingCallTimeout);
+            sendCallSignal(senderId, "reject", null);
+            closeModal();
+            updateCallState(CallState.IDLE);
+            currentCallerId = null;
+        });
+
+    } catch (error) {
+        console.error("Lỗi khi xử lý cuộc gọi đến:", error);
+        handleCallError(error, 'handleIncomingCall');
+        closeModal();
+    }
+}
+
+// Cập nhật hàm handleCallAnswer
+async function handleCallAnswer(senderId, answerData) {
+    try {
+        console.log("Xử lý answer từ:", senderId);
+        console.log("Answer data received:", answerData);
+        
+        if (!answerData || !answerData.sdp || !isValidSDP(answerData.sdp)) {
+            console.error("Answer không hợp lệ");
+            return;
+        }
+
+        if (!peerConnection) {
+            console.log("Khởi tạo peer connection mới khi nhận answer");
+            await initializePeerConnection(senderId);
+        }
+
+        const answerDesc = new RTCSessionDescription({
+            type: 'answer',
+            sdp: answerData.sdp
+        });
+        
+        console.log("Setting remote description (answer):", answerDesc);
+        await peerConnection.setRemoteDescription(answerDesc);
+        
+        // Hiển thị modal cho người gọi
+        $('#callModal').modal('show');
+        document.getElementById("call-interface").style.display = 'block';
+        document.getElementById("connectionStatus").style.display = 'block';
+        document.getElementById("statusMessage").textContent = 'Đang thiết lập kết nối...';
+        document.getElementById("incoming-call").style.display = 'none';
+        
+        console.log("Đã hoàn tất xử lý answer");
+    } catch (error) {
+        console.error("Lỗi khi xử lý answer:", error);
+        handleCallError(error, 'handleCallAnswer');
+    }
+}
+
+// Xử lý reconnect offer
+async function handleReconnectOffer(senderId, offerData) {
+    try {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(offerData));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        sendSignal('answer', answer);
+    } catch (error) {
+        console.error("Lỗi khi xử lý reconnect offer:", error);
+        endCall();
+    }
+}
+
+// Gửi tín hiệu WebRTC
 function sendSignal(type, data) {
     let senderId = document.getElementById("currentUser").value;
     let receiverId = document.getElementById("selectedUser").value;
@@ -457,17 +1050,102 @@ function sendSignal(type, data) {
             console.error("❌ Lỗi gửi tín hiệu WebRTC:", err.toString());
         });
 }
-// Hàm đóng modal
-// Gửi candidate qua SignalR
-function sendCandidate(candidate) {
-    sendSignal('candidate', candidate);
-}
-// Xử lý candidate nhận được
-connection.on("ReceiveIceCandidate", function (candidate) {
-    if (peerConnection) {
-        peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+
+// Thiết lập media stream
+async function setupMediaStream(audioOnly = false) {
+    try {
+        // First check if media devices are available
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('Media devices not supported in this browser');
+        }
+
+        // List available devices to debug
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const hasAudio = devices.some(device => device.kind === 'audioinput');
+        const hasVideo = devices.some(device => device.kind === 'videoinput');
+
+        console.log('Available devices:', {
+            audio: hasAudio,
+            video: hasVideo
+        });
+
+        // Set up constraints based on available devices
+        const constraints = {
+            audio: hasAudio,
+            video: !audioOnly && hasVideo ? {
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            } : false
+        };
+
+        // If no devices are available, throw error
+        if (!hasAudio && (!hasVideo || audioOnly)) {
+            throw new Error('No audio or video devices found');
+        }
+
+        // Try to get the stream
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        return stream;
+    } catch (error) {
+        console.error('Media setup error:', error);
+        
+        // Try fallback to audio only if video fails
+        if (!audioOnly && error.name === 'NotFoundError') {
+            console.log('Falling back to audio only...');
+            return setupMediaStream(true);
+        }
+        
+        handleCallError(error, 'setupMediaStream');
+        throw error;
     }
-});
-function closeModal() {
-    $('#callModal').modal('hide');  // Sử dụng Bootstrap modal để ẩn modal
 }
+
+// Kết thúc cuộc gọi
+function endCall(senderId) {
+    console.log("Kết thúc cuộc gọi");
+    
+    const localVideo = document.getElementById("localVideo");
+    const remoteVideo = document.getElementById("remoteVideo");
+    
+    if (localVideo.srcObject) {
+        localVideo.srcObject.getTracks().forEach(track => track.stop());
+        localVideo.srcObject = null;
+    }
+    
+    if (remoteVideo.srcObject) {
+        remoteVideo.srcObject.getTracks().forEach(track => track.stop());
+        remoteVideo.srcObject = null;
+    }
+    
+    if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+    }
+    
+    document.getElementById("call-interface").style.display = 'none';
+    document.getElementById("incoming-call").style.display = 'none';
+    
+    callAccepted = false;
+    currentCallerId = null; // Reset người gọi
+    updateCallState(CallState.IDLE);
+    
+    stopCallTimer();
+    closeModal();
+}
+
+// Đóng modal cuộc gọi
+function closeModal() {
+    $('#callModal').modal('hide');
+
+    // Reset UI
+    document.getElementById("incoming-call").style.display = 'none';
+    document.getElementById("call-interface").style.display = 'none';
+    
+    if (incomingCallTimeout) {
+        clearTimeout(incomingCallTimeout);
+        incomingCallTimeout = null;
+    }
+}
+
+// Khởi tạo biến peerConnection
+let peerConnection = null;
