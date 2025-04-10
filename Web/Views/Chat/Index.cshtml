@@ -2,61 +2,77 @@
     ViewData["Title"] = "Chat";
 }
 <link rel="stylesheet" href="/css/chat/chat.css">
-<div class="card chat-sidebar-container sidebar-container chat-design"  data-sidebar-container="chat">
-    <div class="chat-sidebar-wrap sidebar" data-sidebar="chat" style="left: 0px;">
+<div class="card chat-sidebar-container sidebar-container chat-design" data-sidebar-container="chat">
+    <div class="chat-sidebar-wrap sidebar" data-sidebar="chat">
         <div class="border-end">
-
-            <div class="chat-sidebar-wrap sidebar" data-sidebar="chat" style="border: none !important;!i;!;border: 4px !important;!i;!;left: 0px;">
-                <div class="border-end">
-                    <div class="pt-2 pb-2 ps-3 pe-3 d-flex align-items-center o-hidden box-shadow-1 chat-topbar">
-                        <a class="link-icon d-md-none" data-sidebar-toggle="chat"><i class="icon-regular ms-0 me-3 i-Left"></i></a>
-                        <div class="form-group m-0 flex-grow-1">
-                            <input class="form-control form-control-rounded" id="search" type="text" placeholder="Search contacts">
-                        </div>
-                    </div>
-                    <div class="contacts-scrollable perfect-scrollbar ps">
-                        <div class="mt-3 pb-2 ps-3 pe-3 fw-bold text-muted border-bottom">
-                            Contacts
-                        </div>
-                        <div class="ps__rail-x" style="left: 0px; bottom: 0px;"><div class="ps__thumb-x" tabindex="0" style="left: 0px; width: 0px;"></div></div><div class="ps__rail-y" style="top: 0px; right: 0px;"><div class="ps__thumb-y" tabindex="0" style="top: 0px; height: 0px;"></div></div>
-                    </div>
+            <div class="pt-2 pb-2 ps-3 pe-3 d-flex align-items-center o-hidden box-shadow-1 chat-topbar">
+                <a class="link-icon d-md-none" data-sidebar-toggle="chat"><i class="icon-regular ms-0 me-3 i-Left"></i></a>
+                <div class="form-group m-0 flex-grow-1">
+                    <input class="form-control form-control-rounded" id="search" type="text" placeholder="Search contacts">
+                </div>
+            </div>
+            <div class="contacts-list">
+                <div class="mt-3 pb-2 ps-3 pe-3 d-flex justify-content-between align-items-center">
+                    <span class="font-weight-bold text-muted">Recent</span>
+                </div>
+                <div class="recent-contacts ps-3 pe-3">
+                    <!-- Recent contacts will be dynamically added here -->
+                </div>
+                
+                <div class="mt-3 pb-2 ps-3 pe-3 d-flex justify-content-between align-items-center">
+                    <span class="font-weight-bold text-muted">Contacts</span>
+                </div>
+                <div class="contacts-scrollable">
+                    <!-- Contacts will be dynamically added here -->
                 </div>
             </div>
         </div>
     </div>
-    <div class="chat-content-wrap sidebar-content" data-sidebar-content="chat" style="margin-left: 260px;">
-        <div class="d-flex ps-3 pe-3 pt-2 pb-2 o-hidden box-shadow-1 chat-topbar">
-            <a class="link-icon d-md-none" data-sidebar-toggle="chat"><i class="icon-regular i-Right ms-0 me-3"></i></a>
-            <div class="d-flex align-items-center">
 
-            </div>
-            <div class="d-flex align-items-end ml-2">
-            </div>
-        </div>
-        <div class="chat-content perfect-scrollbar ps" data-suppress-scroll-x="true">
-            <div class="ps__rail-x" style="left: 0px; bottom: 0px;"><div class="ps__thumb-x" tabindex="0" style="left: 0px; width: 0px;"></div></div><div class="ps__rail-y" style="top: 0px; height: 396px; right: 0px;"><div class="ps__thumb-y" tabindex="0" style="top: 0px; height: 348px;"></div></div>
-        </div>
-        <div class="ps-3 pe-3 pt-3 pb-3 box-shadow-1 chat-input-area">
-            <form class="inputForm">
-                <div class="form-group">
-                    <textarea class="form-control form-control-rounded" id="messageInput" placeholder="Type your message" name="message" cols="30" rows="3"></textarea>
+    <div class="chat-content-wrap sidebar-content" data-sidebar-content="chat">
+        <div class="d-flex ps-3 pe-3 pt-2 pb-2 o-hidden box-shadow-1 chat-topbar align-items-center">
+            <a class="link-icon d-md-none" data-sidebar-toggle="chat"><i class="icon-regular i-Right ms-0 me-3"></i></a>
+            <div class="d-flex align-items-center flex-grow-1">
+                <img class="avatar-sm rounded-circle me-2 d-none" src="" alt="User Avatar" id="selectedUserAvatar">
+                <div class="selected-user-info">
+                    <h6 class="mb-0 selected-user-name"></h6>
+                    <small class="text-muted user-status">Select a contact to start chatting</small>
                 </div>
-                <div class="d-flex">
-                    <div class="flex-grow-1"></div>
-                    <input type="hidden" value="@User.Identity.Name" data-username="@User.FindFirst("UserName")?.Value" id="currentUser" />
-                    <input type="hidden" id="currentUserImage" value="@User.FindFirst("UserImage")?.Value">
-                    <input type="hidden" id="selectedUser" />
-                    <input type="file" id="fileInput" class="d-none" />
-                    <button type="button" class="btn btn-icon btn-rounded btn-outline-secondary me-2" id="uploadFileButton">
-                        <i class="i-Paper-Plane"></i>
+            </div>
+            <div class="chat-actions">
+                <button class="btn btn-icon btn-light rounded-circle me-2 startCallButton" style="display: none;">
+                    <i class="fas fa-video" style="margin:auto"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="chat-content perfect-scrollbar ps">
+            <!-- Messages will be dynamically added here -->
+        </div>
+
+        <div class="chat-input-container">
+            <form class="inputForm">
+                <div class="input-group">
+                    <input type="file" id="fileInput" class="d-none">
+                    <button type="button" class="btn btn-link text-muted" id="uploadFileButton">
+                        <i class="fas fa-paperclip"></i>
                     </button>
-                    <input type="button" class="btn btn-icon btn-rounded btn-outline-primary" id="sendButton" value="Send" />
+                    <textarea class="form-control" id="messageInput" placeholder="Type your message" rows="1"></textarea>
+                    <button type="button" class="btn btn-link text-primary" id="sendButton">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
-<!-- Gọi Partial View -->
+
+<input type="hidden" value="@User.Identity.Name" data-username="@User.FindFirst("UserName")?.Value" id="currentUser" />
+<input type="hidden" id="currentUserImage" value="@User.FindFirst("UserImage")?.Value">
+<input type="hidden" id="selectedUser" />
+
 @await Html.PartialAsync("_CallInterface")
+
+<!-- Scripts -->
 <script src="/js/chat/signalr.js"></script>
 <script src="/js/chat/chat.js"></script>

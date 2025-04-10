@@ -97,16 +97,21 @@ connection.on("UpdateUserList", function (allUsers, onlineUsers) {
                 ? `/content/images/avatar/${user.imagePath}`
                 : "/content/images/photo-long-1.jpg";
 
-            let userItem = `
-                <div class="p-3 d-flex border-bottom align-items-center contact ${isOnline ? "online" : ""}" 
-                    data-userid="${user.userId}" data-username="${user.userName}">
-                     <img class="avatar-sm rounded-circle me-3" src="${avatarPath}" alt="${user.userName}">
-                     <div class="m-1">
-                      <h6 class="m-0">${user.userName}</h6>
-                     </div>
+            let userItem = document.createElement("div");
+            userItem.className = `contact ${isOnline ? "online" : ""}`;
+            userItem.setAttribute("data-userid", user.userId);
+            userItem.setAttribute("data-username", user.userName);
+            
+            userItem.innerHTML = `
+                <img class="avatar-sm rounded-circle" src="${avatarPath}" alt="${user.userName}">
+                <div class="contact-info">
+                    <h6 class="mb-0">${user.userName}</h6>
+                    <small class="text-muted">${isOnline ? 'Online' : 'Offline'}</small>
                 </div>
+                <span class="status-dot ${isOnline ? 'online' : 'offline'}"></span>
             `;
-            contactList.innerHTML += userItem;
+            
+            contactList.appendChild(userItem);
         }
     });
 });
@@ -166,33 +171,73 @@ function sendMessage() {
 
 // Xử lý sự kiện click trên danh sách người dùng
 document.addEventListener("click", function (event) {
-    let target = event.target.closest(".contact");
-    if (!target) return;
-    handleContactClick(target);
+    // Handle contact click
+    const contactTarget = event.target.closest(".contact");
+    if (contactTarget) {
+        // Remove active class from all contacts
+        document.querySelectorAll(".contact").forEach(contact => {
+            contact.classList.remove("active");
+        });
+        // Add active class to clicked contact
+        contactTarget.classList.add("active");
+        handleContactClick(contactTarget);
+    }
+
+    // Handle call button click
+    const callButton = event.target.closest(".startCallButton");
+    if (callButton) {
+        const currentUser = document.getElementById("currentUser").value;
+        const receiverId = document.getElementById("selectedUser").value;
+        
+        if (!receiverId) {
+            alert("⚠ Vui lòng chọn một người để gọi.");
+            return;
+        }
+
+        try {
+            startCall(receiverId);
+        } catch (error) {
+            console.error("Lỗi khi bắt đầu cuộc gọi:", error);
+            handleCallError(error, 'startCall');
+        }
+    }
 });
 
 function handleContactClick(target) {
     let selectedUser = target.getAttribute("data-username");
     let selectedUserId = target.getAttribute("data-userid");
     let selectedUserAvatar = target.querySelector("img").getAttribute("src");
-    let chatTopbar = document.querySelector(".chat-topbar .d-flex.align-items-center");
-    let callTopbar = document.querySelector(".chat-topbar .d-flex.align-items-end");
-    chatTopbar.innerHTML = `
-        <img class="avatar-sm rounded-circle me-2" src="${selectedUserAvatar}" alt="${selectedUser}">
-        <p class="m-0 text-title text-16 flex-grow-1">${selectedUser}</p>
-    `;
-    callTopbar.innerHTML = `
-         <button class="btn btn-sm btn-outline-primary ms-auto startCallButton">
-             <i class="i-Phone"></i> Call
-         </button>
-    `
-    document.querySelector(".chat-content").innerHTML = "";
-    document.getElementById("messageInput").focus();
+    
+    // Update selected user info
     document.getElementById("selectedUser").value = selectedUserId;
     document.getElementById("selectedUser").setAttribute("data-username", selectedUser);
     document.getElementById("selectedUser").setAttribute("data-imagePath", selectedUserAvatar);
 
-    // Load tin nhắn cũ khi chọn user
+    // Update chat topbar
+    const selectedUserInfo = document.querySelector(".selected-user-info");
+    if (selectedUserInfo) {
+        selectedUserInfo.querySelector(".selected-user-name").textContent = selectedUser;
+        selectedUserInfo.querySelector(".user-status").textContent = "Online";
+    }
+
+    // Update avatar
+    const selectedUserAvatarImg = document.getElementById("selectedUserAvatar");
+    if (selectedUserAvatarImg) {
+        selectedUserAvatarImg.src = selectedUserAvatar;
+        selectedUserAvatarImg.classList.remove("d-none");
+    }
+
+    // Show call button
+    const startCallButton = document.querySelector(".startCallButton");
+    if (startCallButton) {
+        startCallButton.style.display = "flex";
+    }
+
+    // Clear and focus message input
+    document.getElementById("messageInput").focus();
+    document.querySelector(".chat-content").innerHTML = "";
+
+    // Load old messages
     let currentUser = document.getElementById("currentUser").value;
     connection.invoke("LoadOldMessages", currentUser, selectedUserId)
         .catch(function (err) {
@@ -1149,3 +1194,12 @@ function closeModal() {
 
 // Khởi tạo biến peerConnection
 let peerConnection = null;
+
+document.querySelectorAll('[data-sidebar-toggle="chat"]').forEach(button => {
+    button.addEventListener('click', () => {
+        const sidebar = document.querySelector('.chat-sidebar-wrap');
+        const overlay = document.querySelector('.sidebar-overlay');
+        sidebar.classList.toggle('show');
+        overlay.classList.toggle('show');
+    });
+});
