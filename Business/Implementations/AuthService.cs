@@ -58,7 +58,7 @@ namespace Business.Implementations
             {
                 return null; // Sai mật khẩu hoặc không tìm thấy user
             }
-            return _jwtHelper.GenerateToken(user.UserAuthId.ToString(), "admin", user.ProviderKey, user.ProviderImage);
+            return _jwtHelper.GenerateToken(user.UserId, "admin", user.ProviderKey, user.ProviderImage);
         }
         public async Task<string> RegisterUserByMobile(string mobile, string password)
         {
