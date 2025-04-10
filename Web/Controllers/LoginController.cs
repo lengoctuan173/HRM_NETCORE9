@@ -138,5 +138,46 @@ namespace Web.Controllers
             // Chuyển hướng đến trang Home sau khi đăng nhập thành công
             return RedirectToAction("Index", "Home");
         }
+        [HttpGet]
+        public IActionResult FacebookLogin()
+        {
+            var properties = new AuthenticationProperties
+            {
+                RedirectUri = Url.Action("FacebookCallback", "Login", null, Request.Scheme)
+            };
+            return Challenge(properties, "Facebook");
+        }
+        [HttpGet]
+        public async Task<IActionResult> FacebookCallback()
+        {
+            var result = await HttpContext.AuthenticateAsync("Facebook");
+
+            if (!result.Succeeded)
+                return RedirectToAction("Login");
+
+            // Xử lý thông tin người dùng từ Facebook (ví dụ: email, name)
+            var name = result.Principal?.FindFirstValue(ClaimTypes.Name);
+            var email = result.Principal?.FindFirstValue(ClaimTypes.Email);
+            var token = string.Empty;
+            token = await _authService.AuthenticateUserByGoogle(email);
+            if (token == null)
+            {
+                try
+                {
+                    token = await _authService.RegisterUserByGoogle(email, name);
+                }
+                catch
+                {
+                    //ViewBag.Error = "Sai tài khoản hoặc mật khẩu!";
+                    TempData["LoginError"] = _localizerService.GetLocalizedString("Login_Err");
+                    return RedirectToAction("Index", "Login");
+                }
+            }
+            // Lưu Token vào Cookie (gọi hàm tiện ích)
+            CookieHelper.SetToken(Response, token, Request.IsHttps);
+
+            // Chuyển hướng đến trang Home sau khi đăng nhập thành công
+            return RedirectToAction("Index", "Home");
+        }
     }
 }

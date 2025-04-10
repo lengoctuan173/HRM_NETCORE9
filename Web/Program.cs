@@ -105,6 +105,11 @@ builder.Services.AddAuthentication(options =>
      options.ClientId = builder.Configuration["Google:ClientId"];
      options.ClientSecret = builder.Configuration["Google:ClientSecret"];
      options.CallbackPath = builder.Configuration["Google:CallbackPath"];
+ })
+.AddFacebook(facebookOptions =>
+ {
+     facebookOptions.AppId = builder.Configuration["Facebook:AppId"];
+     facebookOptions.AppSecret = builder.Configuration["Facebook:AppSecret"];
  });
 builder.Services.AddHttpContextAccessor(); // lấy thông tin user, session, request headers từ bất kỳ đâu trong ứng dụng.
 // Đăng ký Authorization
