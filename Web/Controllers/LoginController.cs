@@ -34,7 +34,7 @@ namespace Web.Controllers
             // Kiểm tra nếu đã đăng nhập (có token trong cookie)
             if (Request.Cookies.ContainsKey("JwtToken"))
             {
-                return RedirectToAction("Index", "Home"); // Chuyển hướng đến trang Home
+                return RedirectToAction("Index", "Chat"); // Chuyển hướng đến trang Home
             }
             return View();
         }
@@ -65,7 +65,7 @@ namespace Web.Controllers
             CookieHelper.SetToken(Response, token, Request.IsHttps);
 
             // Chuyển hướng đến trang Home sau khi đăng nhập thành công
-            return RedirectToAction("Index", "Home");
+            return RedirectToAction("Index", "Chat");
         }
         [HttpPost]
         [AllowAnonymous]
@@ -136,7 +136,7 @@ namespace Web.Controllers
             CookieHelper.SetToken(Response, token, Request.IsHttps);
 
             // Chuyển hướng đến trang Home sau khi đăng nhập thành công
-            return RedirectToAction("Index", "Home");
+            return RedirectToAction("Index", "Chat");
         }
         [HttpGet]
         public IActionResult FacebookLogin()
@@ -177,7 +177,7 @@ namespace Web.Controllers
             CookieHelper.SetToken(Response, token, Request.IsHttps);
 
             // Chuyển hướng đến trang Home sau khi đăng nhập thành công
-            return RedirectToAction("Index", "Home");
+            return RedirectToAction("Index", "Chat");
         }
     }
 }
