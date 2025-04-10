@@ -58,7 +58,7 @@ class Signup {
             success: (response) => {
                 if (response.isResult) {
                     // Thành công → chuyển trang hoặc hiện thông báo
-                    window.location.href = "/home/index";
+                    window.location.href = "/Chat/index";
                 }
             },
             error: (response) => {
