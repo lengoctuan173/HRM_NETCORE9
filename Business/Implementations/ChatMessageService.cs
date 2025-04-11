@@ -34,12 +34,30 @@ namespace Business.Implementations
             return await _chatMessageRepository.getallUsersAsync();
         }
 
-        //public async Task<List<Syccchatmessage>> GetMessagesInGroupAsync(int groupId)
+        // Triển khai các phương thức chat nhóm
+        public async Task<List<Syccchatgroup>> GetUserGroupsAsync(string userId)
+        {
+            return await _chatMessageRepository.GetUserGroupsAsync(userId);
+        }
+
+        public async Task<Syccchatgroup> CreateGroupAsync(string groupName, string creatorId, List<string> memberIds)
+        {
+            return await _chatMessageRepository.CreateGroupAsync(groupName, creatorId, memberIds);
+        }
+
+        public async Task<List<SyccchatmessageDto>> GetGroupMessagesAsync(string groupId)
+        {
+            return await _chatMessageRepository.GetGroupMessagesAsync(groupId);
+        }
+
+        public async Task SaveGroupMessageAsync(Syccchatmessage message)
+        {
+            await _chatMessageRepository.SaveGroupMessageAsync(message);
+        }
+
+        //public async Task<List<Syccchatmessage>> GetGroupMembersAsync(string groupId)
         //{
-        //    return await _context.Syccchatmessages
-        //        .Where(m => m.ChatId == groupId)
-        //        .OrderBy(m => m.Timestamp)
-        //        .ToListAsync();
+        //    return await _chatMessageRepository.GetGroupMembersAsync(groupId);
         //}
 
     }
