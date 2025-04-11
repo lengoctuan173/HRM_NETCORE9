@@ -3,6 +3,15 @@
     Layout = "";
     ViewData["Title"] = "Login";///_Localizer.GetLocalized("Login");
     var currentCulture = Context.Features.Get<IRequestCultureFeature>()?.RequestCulture.UICulture.Name ?? "en-US";
+    var currentFlag = currentCulture.Split('-')[1].ToLower();
+    var currentText = currentCulture switch
+    {
+        "en-US" => "English",
+        "vi-VN" => "Tiếng Việt",
+        "ja-JP" => "日本語",
+        "ko-KR" => "한국어",
+        _ => "English"
+    };
 }
 @model Model.Models.DTOs.SycuuserDto
 <!DOCTYPE html>
@@ -34,21 +43,95 @@
         .language-switcher {
             text-align: center;
             margin-bottom: 15px;
+            position: relative;
+            width: 100%;
         }
 
-        .custom-dropdown {
+        .custom-select-wrapper {
+            position: relative;
+            user-select: none;
+            width: 100%;
+            z-index: 1000;
+        }
+
+        .custom-select {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #ddd;
             border-radius: 4px;
-            border: 1px solid #ccc;
-            background-color: #f8f9fa;
-            cursor: pointer;
-            padding: .375rem .75rem;
+            background-color: #fff;
         }
 
-            .custom-dropdown:focus {
-                border-color: #639;
-                outline: none;
-                box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
-            }
+        .custom-select__trigger {
+            position: relative;
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+            height: 38px;
+            cursor: pointer;
+            background: #fff;
+        }
+
+        .custom-select__trigger img {
+            width: 20px;
+            margin-right: 10px;
+        }
+
+        .custom-options {
+            position: absolute;
+            display: block;
+            top: 100%;
+            left: 0;
+            right: 0;
+            border: 1px solid #ddd;
+            border-top: 0;
+            background: #fff;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            z-index: 1001;
+            border-radius: 0 0 4px 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .custom-select.open .custom-options {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: all;
+            display: block !important;
+        }
+
+        .custom-option {
+            position: relative;
+            display: flex;
+            align-items: center;
+            padding: 8px 11px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .custom-option img {
+            width: 20px;
+            margin-right: 10px;
+        }
+
+        .custom-option:hover {
+            background-color: #f8f9fa;
+        }
+
+        .custom-option.selected {
+            background-color: #e3f2fd;
+        }
+        .card.o-hidden {
+            overflow: visible !important;
+        }
+
+        .auth-content {
+            z-index: auto !important;
+        }
     </style>
 </head>
 <body class="text-left">
@@ -85,13 +168,35 @@
                             </form>
                             <div class="language-switcher">
                                 <form id="langForm" asp-controller="Language" asp-action="ChangeLanguage" method="get">
-                                    <select name="culture" onchange="this.form.submit();" class="custom-dropdown w-100">
-                                        <option value="en-US" selected="@(currentCulture == "en-US")">🇺🇸 English</option>
-                                        <option value="vi-VN" selected="@(currentCulture == "vi-VN")">🇻🇳 Tiếng Việt</option>
-                                        <option value="ja-JP" selected="@(currentCulture == "ja-JP")">🇯🇵 日本語</option>
-                                        <option value="ko-KR" selected="@(currentCulture == "ko-KR")">🇰🇷 한국어</option>
-                                    </select>
+                                    <input type="hidden" name="culture" id="selectedCulture" value="@currentCulture" />
                                     <input type="hidden" name="returnUrl" value="@Context.Request.Path@Context.Request.QueryString" />
+                                    
+                                    <div class="custom-select-wrapper">
+                                        <div class="custom-select">
+                                            <div class="custom-select__trigger">
+                                                <img src="~/content/images/flag/@(currentFlag).svg" alt="" />
+                                                <span>@currentText</span>
+                                            </div>
+                                            <div class="custom-options">
+                                                <div class="custom-option @(currentCulture == "en-US" ? "selected" : "")" data-value="en-US">
+                                                    <img src="~/content/images/flag/us.svg" alt="" />
+                                                    <span>English</span>
+                                                </div>
+                                                <div class="custom-option @(currentCulture == "vi-VN" ? "selected" : "")" data-value="vi-VN">
+                                                    <img src="~/content/images/flag/vn.svg" alt="" />
+                                                    <span>Tiếng Việt</span>
+                                                </div>
+                                                <div class="custom-option @(currentCulture == "ja-JP" ? "selected" : "")" data-value="ja-JP">
+                                                    <img src="~/content/images/flag/jp.svg" alt="" />
+                                                    <span>日本語</span>
+                                                </div>
+                                                <div class="custom-option @(currentCulture == "ko-KR" ? "selected" : "")" data-value="ko-KR">
+                                                    <img src="~/content/images/flag/kr.svg" alt="" />
+                                                    <span>한국어</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </form>
                             </div>
                            @*  <div class="mt-3 text-center">
@@ -105,7 +210,7 @@
                                 <i class="i-Mail-with-At-Sign"></i> @_Localizer.GetLocalizedString("Signup")
                             </a>
                             <a class="btn btn-rounded btn-outline-google btn-block btn-icon-text" href="/Login/GoogleLogin">
-                                <i class="i-Google-Plus"></i> @_Localizer.GetLocalizedString("Signinwith") Google
+                                <i class="i-Google-Plus flag-icon-gb-eng"></i> @_Localizer.GetLocalizedString("Signinwith") Google
                             </a>
                             <a class="btn btn-rounded btn-block btn-icon-text btn-outline-facebook d-none" href="/Login/FacebookLogin">
                                 <i class="i-Facebook-2"></i> @_Localizer.GetLocalizedString("Signinwith") Facebook
@@ -122,6 +227,49 @@
     <script src="~/js/core/ks.ems.message.js"></script>
     <script src="~/js/core/ks.ems.dialog.js"></script>
     <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(e) {
+                const select = document.querySelector('.custom-select');
+                if (!select.contains(e.target)) {
+                    select.classList.remove('open');
+                }
+            });
+
+            // Toggle dropdown
+            document.querySelector('.custom-select__trigger').addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const select = this.closest('.custom-select');
+                select.classList.toggle('open');
+            });
+
+            // Handle option selection
+            document.querySelectorAll('.custom-option').forEach(option => {
+                option.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const select = this.closest('.custom-select');
+                    const currentSelected = select.querySelector('.custom-option.selected');
+                    if (currentSelected) {
+                        currentSelected.classList.remove('selected');
+                    }
+                    this.classList.add('selected');
+                    
+                    const value = this.getAttribute('data-value');
+                    const img = this.querySelector('img').src;
+                    const text = this.querySelector('span').textContent;
+
+                    const trigger = select.querySelector('.custom-select__trigger');
+                    trigger.querySelector('img').src = img;
+                    trigger.querySelector('span').textContent = text;
+
+                    document.getElementById('selectedCulture').value = value;
+                    document.getElementById('langForm').submit();
+                });
+            });
+        });
     </script>
 </body>
 </html>
