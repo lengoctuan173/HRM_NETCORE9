@@ -6,7 +6,7 @@
                     <span class="call-status">Cuộc gọi</span>
                     <small id="callTimer" class="text-muted ms-2" style="display:none;">00:00</small>
                 </h5>
-                <button class="btn btn-close" type="button" data-bs-dismiss="modal" aria-label="Close" id="closeCallButton"></button>
+                <button class="btn btn-close d-none" type="button" data-bs-dismiss="modal" aria-label="Close" id="closeCallButton"></button>
             </div>
             <div class="modal-body p-3">
                 <!-- Thông báo lỗi -->
@@ -40,13 +40,13 @@
                         </div>
                     </div>
                     <div class="call-controls">
-                        <button class="btn btn-outline-secondary me-2" id="toggleMicButton">
+                        <button class="btn btn-outline-secondary rounded-circle me-2" id="toggleMicButton">
                             <i class="fas fa-microphone"></i>
                         </button>
                         <button class="btn btn-danger" id="endCallButton">
                             <i class="fas fa-phone-slash"></i> Kết thúc
                         </button>
-                        <button class="btn btn-outline-secondary ms-2" id="toggleSpeakerButton">
+                        <button class="btn btn-outline-secondary rounded-circle ms-2" id="toggleSpeakerButton">
                             <i class="fas fa-volume-up"></i>
                         </button>
                     </div>

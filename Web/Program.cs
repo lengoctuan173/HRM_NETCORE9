@@ -18,6 +18,7 @@ using Microsoft.IdentityModel.Tokens;
 using Model.Models;
 using Resources;
 using Web.Hubs;
+using System.Security.Claims;
 var builder = WebApplication.CreateBuilder(args);
 /// Cau hinh cho send code
 builder.Services.AddMemoryCache();
@@ -170,31 +171,68 @@ app.UseStaticFiles(); // Đảm bảo file tĩnh được phục vụ trước k
 // Kích hoạt Authentication & Authorization
 app.UseAuthentication();
 app.UseAuthorization();
-// Middleware kiểm tra JWT hết hạn và xóa cookie nếu cần
+// Middleware kiểm tra JWT hết hạn và refresh token nếu cần
 app.Use(async (context, next) =>
 {
     var path = context.Request.Path.Value?.ToLower();
     var token = context.Request.Cookies["JwtToken"];
     var langCookie = context.Request.Cookies[".AspNetCore.Culture"];
     var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    var expiryMinutes = Convert.ToDouble(app.Configuration["JwtSettings:ExpiryMinutes"]);
+
     logger.LogInformation($"Path: {path}, JwtToken: {token}, CultureCookie: {langCookie}");
-    //// Bỏ qua Middleware nếu truy cập API hoặc SignalR (tránh lỗi vòng lặp)
-    if (path.StartsWith("/api") || path.StartsWith("/chathub") || path.Contains("/language") || path.Contains("/content") || path.Contains("/css") || path.Contains("/js") || path.Contains("/scripts") || path.Contains("/images"))
+
+    // Bỏ qua Middleware nếu truy cập API hoặc SignalR
+    if (path.StartsWith("/api") || path.StartsWith("/chathub") || path.Contains("/language") || 
+        path.Contains("/content") || path.Contains("/css") || path.Contains("/js") || 
+        path.Contains("/scripts") || path.Contains("/images"))
     {
         await next();
         return;
     }
+
     if (!string.IsNullOrEmpty(token))
     {
-        var tokenHandler = new JwtSecurityTokenHandler();
-        var jwtToken = tokenHandler.ReadToken(token) as JwtSecurityToken;
-
-        if (jwtToken != null && jwtToken.ValidTo < DateTime.UtcNow)
+        try 
         {
-            // Token hết hạn => Xóa cookie
+            // Tạo scope mới để resolve IJwtHelper
+            using (var scope = app.Services.CreateScope())
+            {
+                var jwtHelper = scope.ServiceProvider.GetRequiredService<IJwtHelper>();
+                
+                // Kiểm tra nếu token sắp hết hạn (còn 5 phút)
+                if (jwtHelper.IsTokenExpired(token))
+                {
+                    // Lấy thông tin từ token cũ
+                    var principal = jwtHelper.GetPrincipalFromExpiredToken(token);
+                    var userId = principal.FindFirst(ClaimTypes.Name)?.Value;
+                    var role = principal.FindFirst(ClaimTypes.Role)?.Value;
+                    var username = principal.FindFirst("UserName")?.Value;
+                    var userImage = principal.FindFirst("UserImage")?.Value;
+
+                    // Tạo token mới
+                    var newToken = jwtHelper.GenerateToken(userId, role, username, userImage);
+
+                    // Cập nhật cookie JWT Token
+                    context.Response.Cookies.Delete("JwtToken");
+                    context.Response.Cookies.Append("JwtToken", newToken, new CookieOptions
+                    {
+                        HttpOnly = true,
+                        Secure = true,
+                        SameSite = SameSiteMode.Strict,
+                        Expires = DateTime.UtcNow.AddMinutes(expiryMinutes)
+                    });
+
+                    logger.LogInformation($"Token refreshed for user: {username}, expires in {expiryMinutes} minutes");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError($"Error refreshing token: {ex.Message}");
+            // Token không hợp lệ, xóa cookie và chuyển về trang login
             context.Response.Cookies.Delete("JwtToken");
 
-            // Nếu không phải đang login, redirect về trang Login
             if (!path.StartsWith("/login"))
             {
                 context.Response.Redirect("/Login");
