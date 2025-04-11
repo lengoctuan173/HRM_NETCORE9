@@ -17,6 +17,10 @@ let currentCallState = CallState.IDLE;
 // Thêm biến để theo dõi người gọi
 let currentCallerId = null;
 
+// Group chat related variables
+let selectedGroupId = null;
+let currentChatType = 'direct'; // 'direct' or 'group'
+
 // Hàm gửi tín hiệu cuộc gọi (offer, answer, end)
 function sendCallSignal(receiverId, signalType, signalData) {
     let senderId = document.getElementById("currentUser").value;
@@ -48,26 +52,38 @@ function createMessageElement(messageObj, isCurrentUser, isFileMessage = false) 
     }
     // Kiểm tra xem có file trong tin nhắn hay không
     isFileMessage = messageObj.filePath ? true : isFileMessage;
-    let avatar = isCurrentUser
-        ? ``
-        : `<img class="avatar-sm rounded-circle me-3" src="/content/images/avatar/${messageObj.senderImage}" alt="User Avatar">`;
+    //let avatar = isCurrentUser
+    //    ? ``
+    //    : `<img class="avatar-sm rounded-circle me-3" src="/content/images/avatar/${messageObj.senderImage}" alt="User Avatar">`;
+    let avatar  = `<img class="avatar-sm rounded-circle me-3" src="/content/images/avatar/${messageObj.senderImage}" alt="User Avatar">`;
 
     let messageContent = isFileMessage
         ? `📎 <a href="/uploads/${messageObj.filePath}" target="_blank">Tải file</a>`
         : messageObj.content;
-
-    messageDiv.innerHTML = `
-        ${isCurrentUser ? avatar : ""}
-        <div class="message flex-grow-1">
-            <div class="d-flex">
-                <p class="mb-1 text-title text-16 flex-grow-1">${messageObj.senderName}</p>
-                <span class="text-small text-muted">${messageObj.timestamp}</span>
-            </div>
-            <p class="m-0">${messageContent}</p>
-        </div>
-        ${isCurrentUser ? "" : avatar}
-    `;
-
+    // Tạo HTML cho tin nhắn
+    if (isCurrentUser) {
+        messageDiv.innerHTML = `
+            <div class="message flex-grow-1">
+                <div class="d-flex">
+                    <p class="mb-1 text-title text-16 flex-grow-1">${messageObj.senderName}</p>
+                    <span class="text-small text-muted">${messageObj.timestamp}</span>
+                 </div>
+                <p class="m-0">${messageContent}</p>
+             </div>
+            ${avatar}
+        `;
+    } else {
+        messageDiv.innerHTML = `
+            ${avatar}
+            <div class="message flex-grow-1">
+                <div class="d-flex">
+                    <p class="mb-1 text-title text-16 flex-grow-1">${messageObj.senderName}</p>
+                    <span class="text-small text-muted">${messageObj.timestamp}</span>
+                 </div>
+                <p class="m-0">${messageContent}</p>
+             </div>
+        `;
+    }
     return messageDiv;
 }
 
@@ -145,42 +161,65 @@ document.getElementById("messageInput").addEventListener("keydown", function (ev
 });
 
 function sendMessage() {
-    let senderId = document.getElementById("currentUser").value;
-    let senderName = document.getElementById("currentUser").getAttribute("data-username");
-    let senderImage = document.getElementById("currentUserImage").value;
-
-    let receiverId = document.getElementById("selectedUser").value;
-    let receiverName = document.getElementById("selectedUser").getAttribute("data-username");
-    let receiverImage = document.getElementById("selectedUser").getAttribute("data-imagepath");
-
     let message = document.getElementById("messageInput").value.trim();
+    if (message === "") return;
 
-    if (!receiverId) {
-        alert("⚠ Vui lòng chọn một người để nhắn tin.");
-        return;
-    }
+    let chatType = document.getElementById("chatType").value;
+    console.log("Loại chat hiện tại:", chatType);
+    
+    if (chatType === 'direct') {
+        let senderId = document.getElementById("currentUser").value;
+        let senderName = document.getElementById("currentUser").getAttribute("data-username");
+        let senderImage = document.getElementById("currentUserImage").value;
+        let receiverId = document.getElementById("selectedUser").value;
+        let receiverName = document.getElementById("selectedUser").getAttribute("data-username");
+        let receiverImage = document.getElementById("selectedUser").getAttribute("data-imagepath");
 
-    if (message !== "") {
+        if (!receiverId) {
+            alert("⚠ Vui lòng chọn một người để nhắn tin.");
+            return;
+        }
+
         connection.invoke("SendMessage", senderId, senderName, senderImage, receiverId, receiverName, receiverImage, message)
             .catch(function (err) {
                 console.error("❌ Lỗi gửi tin nhắn:", err.toString());
             });
-        document.getElementById("messageInput").value = "";
+    } else if (chatType === 'group') {
+        let selectedGroupId = document.getElementById("selectedGroup").value;
+        console.log("Đang gửi tin nhắn đến nhóm:", selectedGroupId);
+        
+        if (!selectedGroupId) {
+            alert("⚠ Vui lòng chọn một nhóm để nhắn tin.");
+            return;
+        }
+
+        connection.invoke("SendGroupMessage", selectedGroupId, message)
+            .then(() => {
+                console.log("✅ Đã gửi tin nhắn nhóm thành công");
+            })
+            .catch(function (err) {
+                console.error("❌ Lỗi gửi tin nhắn nhóm:", err.toString());
+                alert("Có lỗi xảy ra khi gửi tin nhắn. Vui lòng thử lại.");
+            });
     }
+
+    document.getElementById("messageInput").value = "";
 }
 
 // Xử lý sự kiện click trên danh sách người dùng
 document.addEventListener("click", function (event) {
-    // Handle contact click
     const contactTarget = event.target.closest(".contact");
     if (contactTarget) {
-        // Remove active class from all contacts
         document.querySelectorAll(".contact").forEach(contact => {
             contact.classList.remove("active");
         });
-        // Add active class to clicked contact
         contactTarget.classList.add("active");
-        handleContactClick(contactTarget);
+
+        if (contactTarget.classList.contains("group")) {
+            handleGroupClick(contactTarget);
+        } else {
+            handleContactClick(contactTarget);
+        }
     }
 
     // Handle call button click
@@ -204,6 +243,11 @@ document.addEventListener("click", function (event) {
 });
 
 function handleContactClick(target) {
+    currentChatType = 'direct';
+    document.getElementById("chatType").value = 'direct';
+    selectedGroupId = null;
+    document.getElementById("selectedGroup").value = "";
+    
     let selectedUser = target.getAttribute("data-username");
     let selectedUserId = target.getAttribute("data-userid");
     let selectedUserAvatar = target.querySelector("img").getAttribute("src");
@@ -227,11 +271,9 @@ function handleContactClick(target) {
         selectedUserAvatarImg.classList.remove("d-none");
     }
 
-    // Show call button
-    const startCallButton = document.querySelector(".startCallButton");
-    if (startCallButton) {
-        startCallButton.style.display = "flex";
-    }
+    // Show call button, hide group info button
+    document.querySelector(".startCallButton").style.display = "flex";
+    document.querySelector(".groupInfoButton").style.display = "none";
 
     // Clear and focus message input
     document.getElementById("messageInput").focus();
@@ -275,21 +317,28 @@ document.getElementById("fileInput").addEventListener("change", function () {
     }
 });
 function sendFile(file) {
-    let senderId = document.getElementById("currentUser").value;
-    let senderName = document.getElementById("currentUser").getAttribute("data-username");
-
-    let receiverId = document.getElementById("selectedUser").value;
-    let receiverName = document.getElementById("selectedUser").getAttribute("data-username");
-
-    if (!receiverId) {
-        alert("⚠ Vui lòng chọn một người để gửi file.");
-        return;
-    }
-
     let formData = new FormData();
     formData.append("file", file);
-    formData.append("senderId", senderId);
-    formData.append("receiverId", receiverId);
+
+    if (currentChatType === 'direct') {
+        let senderId = document.getElementById("currentUser").value;
+        let receiverId = document.getElementById("selectedUser").value;
+
+        if (!receiverId) {
+            alert("Please select a contact to send the file to.");
+            return;
+        }
+
+        formData.append("senderId", senderId);
+        formData.append("receiverId", receiverId);
+    } else if (currentChatType === 'group') {
+        if (!selectedGroupId) {
+            alert("Please select a group to send the file to.");
+            return;
+        }
+
+        formData.append("groupId", selectedGroupId);
+    }
 
     fetch("/Chat/UploadFile", {
         method: "POST",
@@ -298,18 +347,25 @@ function sendFile(file) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                console.log("📎 File đã được tải lên:", data.fileUrl);
+                console.log("File uploaded:", data.fileUrl);
 
-                // 📌 Debug: Kiểm tra file gửi qua SignalR
-                console.log("🔹 Gửi file qua SignalR: ", senderId, senderName, receiverId, receiverName, data.fileUrl);
+                if (currentChatType === 'direct') {
+                    let senderId = document.getElementById("currentUser").value;
+                    let senderName = document.getElementById("currentUser").getAttribute("data-username");
+                    let receiverId = document.getElementById("selectedUser").value;
+                    let receiverName = document.getElementById("selectedUser").getAttribute("data-username");
 
-                connection.invoke("SendFileMessage", senderId, senderName, receiverId, receiverName, data.fileUrl)
-                    .catch(err => console.error("❌ Lỗi gửi file:", err));
+                    connection.invoke("SendFileMessage", senderId, senderName, receiverId, receiverName, data.fileUrl)
+                        .catch(err => console.error("Error sending file message:", err));
+                } else if (currentChatType === 'group') {
+                    connection.invoke("SendGroupFileMessage", selectedGroupId, data.fileUrl)
+                        .catch(err => console.error("Error sending group file message:", err));
+                }
             } else {
-                alert("❌ Lỗi tải file lên!");
+                alert("Error uploading file!");
             }
         })
-        .catch(err => console.error("❌ Lỗi tải file lên:", err));
+        .catch(err => console.error("Error uploading file:", err));
 }
 connection.on("ReceiveFileMessage", function (fileMessage) {
     let chatContent = document.querySelector(".chat-content");
@@ -1203,3 +1259,312 @@ document.querySelectorAll('[data-sidebar-toggle="chat"]').forEach(button => {
         overlay.classList.toggle('show');
     });
 });
+
+// Update the connection handlers for group functionality
+connection.on("UpdateGroupList", function (groups) {
+    console.log('Nhận danh sách nhóm mới:', groups);
+    let groupsList = document.querySelector('.groups-list');
+    groupsList.innerHTML = '';
+
+    groups.forEach(function (group) {
+        let groupItem = document.createElement('div');
+        groupItem.className = 'contact group';
+        groupItem.setAttribute('data-groupid', group.groupChatId);
+        groupItem.setAttribute('data-groupname', group.groupChatName);
+        
+        groupItem.innerHTML = `
+            <div class="avatar-sm rounded-circle bg-primary text-white d-flex align-items-center justify-content-center">
+                <i class="fas fa-users"></i>
+            </div>
+            <div class="contact-info">
+                <h6 class="mb-0">${group.groupChatName}</h6>
+                <small class="text-muted">Nhóm chat</small>
+            </div>
+        `;
+        
+        groupsList.appendChild(groupItem);
+    });
+});
+
+connection.on("GroupCreated", function (group) {
+    console.log('Nhóm mới được tạo:', group);
+    let groupsList = document.querySelector('.groups-list');
+    
+    let groupItem = document.createElement('div');
+    groupItem.className = 'contact group';
+    groupItem.setAttribute('data-groupid', group.groupChatId);
+    groupItem.setAttribute('data-groupname', group.groupChatName);
+    
+    groupItem.innerHTML = `
+        <div class="avatar-sm rounded-circle bg-primary text-white d-flex align-items-center justify-content-center">
+            <i class="fas fa-users"></i>
+        </div>
+        <div class="contact-info">
+            <h6 class="mb-0">${group.groupChatName}</h6>
+            <small class="text-muted">Nhóm chat</small>
+        </div>
+    `;
+    
+    groupsList.appendChild(groupItem);
+});
+
+// Hàm xử lý tin nhắn nhóm
+function createGroupMessageElement(messageObj, isCurrentUser, isFileMessage = false) {
+    console.log("Tạo element tin nhắn nhóm:", messageObj);
+    
+    let messageDiv = document.createElement("div");
+    messageDiv.classList.add("d-flex", "mb-4");
+    if (isCurrentUser) {
+        messageDiv.classList.add("user");
+    }
+
+    // Kiểm tra xem có file trong tin nhắn hay không
+    isFileMessage = messageObj.filePath ? true : isFileMessage;
+
+    // Xử lý ảnh đại diện
+    let senderImage = messageObj.senderImage || "/content/images/avatar/default-avatar.jpg";
+    let avatar = `<img class="avatar-sm rounded-circle me-3" src="/content/images/avatar/${senderImage}" alt="User Avatar">`;
+
+    // Xử lý nội dung tin nhắn
+    let messageContent = "";
+    if (isFileMessage && messageObj.filePath) {
+        messageContent = `📎 <a href="/uploads/${messageObj.filePath}" target="_blank">Tải file</a>`;
+    } else {
+        messageContent = messageObj.content || messageObj.message || "";
+    }
+
+    // Xử lý thời gian
+    let timestamp = messageObj.timestamp || new Date().toLocaleString();
+
+    // Tạo HTML cho tin nhắn
+    if (isCurrentUser) {
+        messageDiv.innerHTML = `
+            <div class="message flex-grow-1">
+                <div class="d-flex">
+                    <p class="mb-1 text-title text-16 flex-grow-1">${messageObj.senderName}</p>
+                    <span class="text-small text-muted">${messageObj.timestamp}</span>
+                 </div>
+                <p class="m-0">${messageContent}</p>
+             </div>
+            ${avatar}
+        `;
+    } else {
+        messageDiv.innerHTML = `
+            ${avatar}
+            <div class="message flex-grow-1">
+                <div class="d-flex">
+                    <p class="mb-1 text-title text-16 flex-grow-1">${messageObj.senderName}</p>
+                    <span class="text-small text-muted">${messageObj.timestamp}</span>
+                 </div>
+                <p class="m-0">${messageContent}</p>
+             </div>
+        `;
+    }
+
+    return messageDiv;
+}
+
+// Cập nhật event handler nhận tin nhắn nhóm
+connection.on("ReceiveGroupMessage", function (messageObj) {
+    console.log("Nhận tin nhắn nhóm:", messageObj);
+    let selectedGroupId = document.getElementById("selectedGroup").value;
+    
+    console.log("So sánh groupId:", {
+        selectedGroupId: selectedGroupId,
+        messageGroupId: messageObj.groupChatId,
+        isEqual: String(messageObj.groupChatId) === String(selectedGroupId)
+    });
+    
+    if (String(messageObj.groupChatId) === String(selectedGroupId)) {
+        let chatContent = document.querySelector(".chat-content");
+        let currentUser = document.getElementById("currentUser").value;
+        
+        console.log("Hiển thị tin nhắn nhóm từ:", messageObj.senderName);
+        let messageElement = createGroupMessageElement(messageObj, messageObj.senderId === currentUser);
+        
+        if (messageElement) {
+            chatContent.appendChild(messageElement);
+            chatContent.scrollTop = chatContent.scrollHeight;
+        }
+    } else {
+        console.log("Tin nhắn không thuộc nhóm hiện tại");
+    }
+});
+
+// Cập nhật event handler nhận lịch sử tin nhắn nhóm
+connection.on("ReceiveGroupMessages", function (messages) {
+    console.log("Nhận lịch sử tin nhắn nhóm:", messages);
+    let chatContent = document.querySelector(".chat-content");
+    chatContent.innerHTML = "";
+    let currentUser = document.getElementById("currentUser").value;
+
+    if (Array.isArray(messages)) {
+        messages.forEach(msg => {
+            let messageElement = createGroupMessageElement(msg, msg.senderId === currentUser, msg.filePath !== null);
+            if (messageElement) {
+                chatContent.appendChild(messageElement);
+            }
+        });
+        chatContent.scrollTop = chatContent.scrollHeight;
+    } else {
+        console.log("Không có tin nhắn hoặc dữ liệu không hợp lệ:", messages);
+    }
+});
+
+// Cập nhật hàm xử lý khi click vào nhóm
+function handleGroupClick(target) {
+    currentChatType = 'group';
+    document.getElementById("chatType").value = 'group';
+    
+    let groupName = target.getAttribute("data-groupname");
+    selectedGroupId = target.getAttribute("data-groupid");
+    document.getElementById("selectedGroup").value = selectedGroupId;
+    
+    console.log("Đã chọn nhóm:", groupName, "ID:", selectedGroupId);
+    
+    // Update chat topbar
+    const selectedUserInfo = document.querySelector(".selected-user-info");
+    if (selectedUserInfo) {
+        selectedUserInfo.querySelector(".selected-user-name").textContent = groupName;
+        selectedUserInfo.querySelector(".user-status").textContent = "Nhóm chat";
+    }
+    
+    // Show group avatar
+    const selectedUserAvatarImg = document.getElementById("selectedUserAvatar");
+    if (selectedUserAvatarImg) {
+        selectedUserAvatarImg.src = "/content/images/avatar/default-avatar.jpg";
+        selectedUserAvatarImg.classList.remove("d-none");
+    }
+    
+    // Show group info button, hide call button
+    document.querySelector(".startCallButton").style.display = "none";
+    
+    // Clear and focus message input
+    document.getElementById("messageInput").value = "";
+    document.getElementById("messageInput").focus();
+    document.querySelector(".chat-content").innerHTML = "";
+    
+    // Load group messages
+    console.log("Đang tải tin nhắn nhóm cho nhóm ID:", selectedGroupId);
+    connection.invoke("LoadGroupMessages", selectedGroupId)
+        .catch(function (err) {
+            console.error("Lỗi khi tải tin nhắn nhóm:", err.toString());
+        });
+}
+
+// Group info button click handler
+document.querySelector(".groupInfoButton").addEventListener("click", function() {
+    if (!selectedGroupId) return;
+    
+    // Load and display group members
+    connection.invoke("GetGroupMembers", selectedGroupId)
+        .then(members => {
+            let membersList = document.querySelector(".group-members-list");
+            membersList.innerHTML = "";
+            
+            members.forEach(member => {
+                let memberItem = document.createElement("div");
+                memberItem.className = "d-flex align-items-center mb-2";
+                memberItem.innerHTML = `
+                    <img class="avatar-xs rounded-circle me-2" src="/content/images/avatar/${member.userImage}" alt="${member.userName}">
+                    <span>${member.userName}</span>
+                `;
+                membersList.appendChild(memberItem);
+            });
+            
+            $('#groupInfoModal').modal('show');
+        })
+        .catch(err => console.error("Error loading group members:", err));
+});
+
+// Xử lý sự kiện tạo nhóm
+document.addEventListener('DOMContentLoaded', function() {
+    // Xử lý nút tạo nhóm
+    document.getElementById('createGroupBtn').addEventListener('click', function() {
+        console.log('Nút tạo nhóm được click');
+        
+        // Lấy danh sách người dùng để chọn thành viên
+        let allUsers = [];
+        document.querySelectorAll('.contacts-scrollable .contact').forEach(contact => {
+            let userId = contact.getAttribute('data-userid');
+            let userName = contact.querySelector('h6').textContent;
+            
+            // Không thêm user hiện tại vào danh sách
+            if (userId !== document.getElementById('currentUser').value) {
+                allUsers.push({
+                    id: userId,
+                    name: userName
+                });
+            }
+        });
+
+        // Tạo danh sách checkbox cho từng user
+        let memberListHtml = '';
+        allUsers.forEach(user => {
+            memberListHtml += `
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" value="${user.id}" id="member${user.id}">
+                    <label class="form-check-label" for="member${user.id}">
+                        ${user.name}
+                    </label>
+                </div>
+            `;
+        });
+
+        // Cập nhật nội dung modal
+        document.querySelector('.member-list').innerHTML = memberListHtml;
+
+        // Hiển thị modal
+        showModalGroup()
+    });
+
+    // Xử lý nút submit tạo nhóm
+    document.getElementById('createGroupSubmit').addEventListener('click', function() {
+        let groupName = document.getElementById('groupName').value.trim();
+        if (!groupName) {
+            alert('Vui lòng nhập tên nhóm');
+            return;
+        }
+
+        // Lấy danh sách thành viên được chọn
+        let selectedMembers = Array.from(document.querySelectorAll('.member-list input:checked'))
+            .map(input => input.value);
+
+        if (selectedMembers.length === 0) {
+            alert('Vui lòng chọn ít nhất một thành viên');
+            return;
+        }
+
+        // Thêm người tạo nhóm vào danh sách thành viên
+        let currentUserId = document.getElementById('currentUser').value;
+        if (!selectedMembers.includes(currentUserId)) {
+            selectedMembers.push(currentUserId);
+        }
+
+        console.log('Tạo nhóm với tên:', groupName);
+        console.log('Thành viên:', selectedMembers);
+
+        // Gọi hàm tạo nhóm qua SignalR
+        connection.invoke('CreateGroup', groupName, selectedMembers)
+            .then(() => {
+                console.log('Nhóm đã được tạo thành công');
+                // Đóng modal
+                closeModalGroup();
+                // Reset form
+                document.getElementById('groupName').value = '';
+                document.querySelectorAll('.member-list input:checked').forEach(input => {
+                    input.checked = false;
+                });
+            })
+            .catch(function (err) {
+                console.error('Lỗi khi tạo nhóm:', err.toString());
+                alert('Có lỗi xảy ra khi tạo nhóm. Vui lòng thử lại.');
+            });
+    });
+});
+function closeModalGroup() {
+    $('#createGroupModal').modal('hide');
+}
+function showModalGroup() {
+    $('#createGroupModal').modal('show');
+}

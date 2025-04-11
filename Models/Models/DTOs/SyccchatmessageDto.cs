@@ -18,5 +18,6 @@ namespace Model.Models.DTOs
         public string Content { get; set; }
         public string Timestamp { get; set; }
         public string FilePath { get; set; }
+        public long? GroupChatId { get; set; }
     }
 }

@@ -14,5 +14,12 @@ namespace Business.Interfaces
        // Task<List<Syccchatmessage>> GetMessagesInGroupAsync(int groupId);
         Task SaveMessageAsync(Syccchatmessage message);
         Task<List<Sycuuser>> getallUsersAsync();
+
+        // Thêm các phương thức cho chat nhóm
+        Task<List<Syccchatgroup>> GetUserGroupsAsync(string userId);
+        Task<Syccchatgroup> CreateGroupAsync(string groupName, string creatorId, List<string> memberIds);
+        Task<List<SyccchatmessageDto>> GetGroupMessagesAsync(string groupId);
+        Task SaveGroupMessageAsync(Syccchatmessage message);
+        //Task<List<Syccchatmessage>> GetGroupMembersAsync(string groupId);
     }
 }
