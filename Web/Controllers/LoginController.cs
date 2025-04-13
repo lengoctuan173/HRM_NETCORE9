@@ -116,10 +116,22 @@ namespace Web.Controllers
 
             if (!result.Succeeded)
                 return BadRequest("Google authentication failed");
+
+            // Debug: Log all claims
+            var claims = result.Principal.Claims;
+            foreach (var claim in claims)
+            {
+                System.Diagnostics.Debug.WriteLine($"Claim Type: {claim.Type}, Value: {claim.Value}");
+            }
+
             var token = string.Empty;
             var email = result.Principal.FindFirst(ClaimTypes.Email)?.Value;
             var name = result.Principal.Identity.Name;
-            var picture = result.Principal.FindFirst("picture")?.Value; ; // Get profile image URL
+            var picture = result.Principal.FindFirst("picture")?.Value;
+            if (picture == null)
+            {
+                picture = result.Principal.FindFirst("image")?.Value;
+            }
             token = await _authService.AuthenticateUserByGoogle(email);
             if (token == null)
             {

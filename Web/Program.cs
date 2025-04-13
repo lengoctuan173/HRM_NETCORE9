@@ -111,6 +111,8 @@ builder.Services.AddAuthentication(options =>
      options.Scope.Add("email");
      options.Scope.Add("https://www.googleapis.com/auth/userinfo.profile");
      options.SaveTokens = true;
+     options.ClaimActions.MapJsonKey("picture", "picture");
+     options.ClaimActions.MapJsonKey("picture", "image");
  })
 .AddFacebook(facebookOptions =>
  {
