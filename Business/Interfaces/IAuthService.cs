@@ -15,7 +15,7 @@ namespace Business.Interfaces
         Task<string> AuthenticateUserByGoogle(string email);
         Task<string> RegisterUserByMobile(string mobile, string password);
         Task<string> RegisterUserByEmail(string email, string password);
-        Task<string> RegisterUserByGoogle(string email, string name);
+        Task<string> RegisterUserByGoogle(string email, string name, string picture);
         Task<bool> isExistUserByEmail(string email);
         Task<bool> isExistUserByMobile(string mobile);
         Task<Sycuuser> getUserByEmail(string email);

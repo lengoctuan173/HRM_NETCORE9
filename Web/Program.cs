@@ -19,6 +19,7 @@ using Model.Models;
 using Resources;
 using Web.Hubs;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
 var builder = WebApplication.CreateBuilder(args);
 /// Cau hinh cho send code
 builder.Services.AddMemoryCache();
@@ -106,6 +107,10 @@ builder.Services.AddAuthentication(options =>
      options.ClientId = builder.Configuration["Google:ClientId"];
      options.ClientSecret = builder.Configuration["Google:ClientSecret"];
      options.CallbackPath = builder.Configuration["Google:CallbackPath"];
+     options.Scope.Add("profile");
+     options.Scope.Add("email");
+     options.Scope.Add("https://www.googleapis.com/auth/userinfo.profile");
+     options.SaveTokens = true;
  })
 .AddFacebook(facebookOptions =>
  {
