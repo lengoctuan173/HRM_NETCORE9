@@ -78,9 +78,9 @@ namespace Business.Implementations
             }
             return _jwtHelper.GenerateToken(user.UserId, "admin", user.UserName, user.ImagePath);
         }
-        public async Task<string> RegisterUserByGoogle(string email, string name)
+        public async Task<string> RegisterUserByGoogle(string email, string name, string picture)
         {
-            var user = await _authRepository.RegisterUserByGoogle(email, name);
+            var user = await _authRepository.RegisterUserByGoogle(email, name, picture);
             if (user == null)
             {
                 return null; // Sai mật khẩu hoặc không tìm thấy user

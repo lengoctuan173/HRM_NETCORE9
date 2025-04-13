@@ -118,16 +118,16 @@ namespace Web.Controllers
                 return BadRequest("Google authentication failed");
             var token = string.Empty;
             var email = result.Principal.FindFirst(ClaimTypes.Email)?.Value;
-            var name =  result.Principal.Identity.Name;
+            var name = result.Principal.Identity.Name;
+            var picture = result.Principal.FindFirst("picture")?.Value; ; // Get profile image URL
             token = await _authService.AuthenticateUserByGoogle(email);
             if (token == null)
             {
                 try
                 {
-                    token = await _authService.RegisterUserByGoogle(email, name);
+                    token = await _authService.RegisterUserByGoogle(email, name, picture); // Pass picture URL to registration
                 }
                 catch {
-                    //ViewBag.Error = "Sai tài khoản hoặc mật khẩu!";
                     TempData["LoginError"] = _localizerService.GetLocalizedString("Login_Err");
                     return RedirectToAction("Index", "Login");
                 }
@@ -158,13 +158,14 @@ namespace Web.Controllers
             // Xử lý thông tin người dùng từ Facebook (ví dụ: email, name)
             var name = result.Principal?.FindFirstValue(ClaimTypes.Name);
             var email = result.Principal?.FindFirstValue(ClaimTypes.Email);
+            var picture = result.Principal.FindFirst("picture")?.Value; // Get profile image URL
             var token = string.Empty;
             token = await _authService.AuthenticateUserByGoogle(email);
             if (token == null)
             {
                 try
                 {
-                    token = await _authService.RegisterUserByGoogle(email, name);
+                    token = await _authService.RegisterUserByGoogle(email, name, picture);
                 }
                 catch
                 {

@@ -114,7 +114,7 @@ namespace Data.Implementations
 
             return newUser;
         }
-        public async Task<Sycuuserauth?> RegisterUserByGoogle(string email, string name)
+        public async Task<Sycuuserauth?> RegisterUserByGoogle(string email, string name,string picture)
         {
 
             var existingUser = await _context.Sycuusers.FirstOrDefaultAsync(u => u.UserEmail == email);
@@ -134,7 +134,7 @@ namespace Data.Implementations
                     UserId = nextId,
                     UserEmail = email,
                     UserName = name ?? email,
-                    ImagePath = "default-avatar.jpg",
+                    ImagePath = picture ?? "default-avatar.jpg",
                     CreateDt = DateTime.UtcNow
                 };
                 _context.Sycuusers.Add(newUser);
