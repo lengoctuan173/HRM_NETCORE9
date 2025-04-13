@@ -146,6 +146,7 @@ namespace Data.Implementations
                 Provider = 1, // Google
                 ProviderKey = email,
                 UserId = userId,
+                ProviderImage = picture ?? "default-avatar.jpg",
                 IsActive = true,
                 CreateDt = DateTime.UtcNow
             };
