@@ -55,7 +55,7 @@ function createMessageElement(messageObj, isCurrentUser, isFileMessage = false) 
     //let avatar = isCurrentUser
     //    ? ``
     //    : `<img class="avatar-sm rounded-circle me-3" src="/content/images/avatar/${messageObj.senderImage}" alt="User Avatar">`;
-    let avatar  = `<img class="avatar-sm rounded-circle me-3" src="/content/images/avatar/${messageObj.senderImage}" alt="User Avatar">`;
+    let avatar = `<img class="avatar-sm rounded-circle me-3" src="${messageObj.senderImage?.startsWith("http") ? messageObj.senderImage : `/content/images/avatar/${messageObj.senderImage}`}" alt="User Avatar">`;
 
     let messageContent = isFileMessage
         ? `📎 <a href="/uploads/${messageObj.filePath}" target="_blank">Tải file</a>`
@@ -110,7 +110,7 @@ connection.on("UpdateUserList", function (allUsers, onlineUsers) {
         if (user.userId !== currentUser) {
             let isOnline = onlineUsers.includes(user.userId);
             let avatarPath = user.imagePath && user.imagePath.trim() !== ""
-                ? `/content/images/avatar/${user.imagePath}`
+                ? (user.imagePath.startsWith("http") ? user.imagePath : `/content/images/avatar/${user.imagePath}`)
                 : "/content/images/photo-long-1.jpg";
 
             let userItem = document.createElement("div");
@@ -1323,7 +1323,7 @@ function createGroupMessageElement(messageObj, isCurrentUser, isFileMessage = fa
 
     // Xử lý ảnh đại diện
     let senderImage = messageObj.senderImage || "/content/images/avatar/default-avatar.jpg";
-    let avatar = `<img class="avatar-sm rounded-circle me-3" src="/content/images/avatar/${senderImage}" alt="User Avatar">`;
+    let avatar = `<img class="avatar-sm rounded-circle me-3" src="${messageObj.senderImage?.startsWith("http") ? messageObj.senderImage : `/content/images/avatar/${messageObj.senderImage}`}" alt="User Avatar">`;
 
     // Xử lý nội dung tin nhắn
     let messageContent = "";
