@@ -945,7 +945,27 @@ class Chat {
             const configuration = {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:stun3.l.google.com:19302' },
+                    { urls: 'stun:stun4.l.google.com:19302' },
+                    {
+                        urls: 'turn:numb.viagenie.ca',
+                        username: 'webrtc@live.com',
+                        credential: 'muazkh'
+                    }
+                ],
+                iceTransportPolicy: 'all',
+                bundlePolicy: 'max-bundle',
+                rtcpMuxPolicy: 'require',
+                iceCandidatePoolSize: 10,
+                iceServers: [
+                    {
+                        urls: [
+                            'stun:stun1.l.google.com:19302',
+                            'stun:stun2.l.google.com:19302'
+                        ]
+                    }
                 ]
             };
 
@@ -954,6 +974,7 @@ class Chat {
             // Xử lý ICE candidate
             this.peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
+                    console.log("Gửi ICE candidate:", event.candidate.type);
                     this.sendCallSignal(senderId, "candidate", event.candidate);
                 }
             };
@@ -961,12 +982,43 @@ class Chat {
             // Xử lý kết nối state
             this.peerConnection.oniceconnectionstatechange = () => {
                 console.log("ICE connection state:", this.peerConnection.iceConnectionState);
-                if (this.peerConnection.iceConnectionState === 'connected') {
-                    document.getElementById("connectionStatus").style.display = 'none';
-                    document.getElementById("call-interface").style.display = 'block';
-                    this.updateCallState(CallState.IN_CALL);
-                    this.startCallTimer();
-                } else if (this.peerConnection.iceConnectionState === 'disconnected') {
+                
+                switch (this.peerConnection.iceConnectionState) {
+                    case 'checking':
+                        document.getElementById("connectionStatus").style.display = 'block';
+                        document.getElementById("statusMessage").textContent = 'Đang kết nối...';
+                        break;
+
+                    case 'connected':
+                        document.getElementById("connectionStatus").style.display = 'none';
+                        document.getElementById("call-interface").style.display = 'block';
+                        document.getElementById("statusMessage").textContent = 'Đã kết nối';
+                        this.updateCallState(CallState.IN_CALL);
+                        this.startCallTimer();
+                        break;
+
+                    case 'disconnected':
+                        console.log('Kết nối tạm thời bị gián đoạn, đang thử kết nối lại...');
+                        document.getElementById("statusMessage").textContent = 'Đang kết nối lại...';
+                        // Cho phép một khoảng thời gian để tự kết nối lại
+                        setTimeout(() => {
+                            if (this.peerConnection.iceConnectionState === 'disconnected') {
+                                this.endCall();
+                            }
+                        }, 5000);
+                        break;
+
+                    case 'failed':
+                        console.log('Kết nối thất bại');
+                        this.endCall();
+                        break;
+                }
+            };
+
+            // Xử lý connection state
+            this.peerConnection.onconnectionstatechange = () => {
+                console.log("Connection state:", this.peerConnection.connectionState);
+                if (this.peerConnection.connectionState === 'failed') {
                     this.endCall();
                 }
             };
@@ -995,6 +1047,7 @@ class Chat {
                 
                 // Thêm tracks vào peer connection
                 stream.getTracks().forEach(track => {
+                    console.log(`Thêm track ${track.kind}`);
                     this.peerConnection.addTrack(track, stream);
                 });
 
@@ -1004,17 +1057,15 @@ class Chat {
                     localVideo.srcObject = stream;
                     if (stream.getVideoTracks().length > 0) {
                         localVideo.style.display = 'block';
-                        localVideo.play().catch(err => {
+                        await localVideo.play().catch(err => {
                             console.warn("Không thể play local video:", err);
                         });
                     } else {
-                        // Nếu không có video, ẩn local video
                         localVideo.style.display = 'none';
                     }
                 }
             } catch (error) {
                 console.error("Lỗi khi thiết lập local stream:", error);
-                // Vẫn cho phép cuộc gọi tiếp tục nếu chỉ có lỗi với video
                 if (!error.message.includes('audio')) {
                     throw error;
                 }
@@ -1472,6 +1523,23 @@ class Chat {
                 console.error("❌ Lỗi gửi tín hiệu cuộc gọi:", err);
                 this.handleCallError(err, 'sendCallSignal');
             });
+    }
+
+    // Thêm hàm mới để xử lý kết nối lại
+    async restartIce() {
+        try {
+            if (this.peerConnection) {
+                const offer = await this.peerConnection.createOffer({ iceRestart: true });
+                await this.peerConnection.setLocalDescription(offer);
+                this.sendCallSignal(this.currentCallerId, "offer", {
+                    type: 'offer',
+                    sdp: offer.sdp,
+                    senderName: document.getElementById("currentUser").getAttribute("data-username")
+                });
+            }
+        } catch (error) {
+            console.error("Lỗi khi restart ICE:", error);
+        }
     }
 }
 
