@@ -631,48 +631,83 @@ class Chat {
 
     async setupMediaStream(audioOnly = false) {
         try {
+            console.log("Bắt đầu thiết lập media stream...");
+            
             // First check if media devices are available
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                throw new Error('Media devices not supported in this browser');
+                throw new Error('Trình duyệt không hỗ trợ getUserMedia');
             }
 
             // List available devices to debug
             const devices = await navigator.mediaDevices.enumerateDevices();
+            console.log('Thiết bị có sẵn:', devices);
+            
             const hasAudio = devices.some(device => device.kind === 'audioinput');
             const hasVideo = devices.some(device => device.kind === 'videoinput');
 
-            console.log('Available devices:', {
+            console.log('Trạng thái thiết bị:', {
                 audio: hasAudio,
                 video: hasVideo
             });
 
             // Set up constraints based on available devices
             const constraints = {
-                audio: hasAudio,
+                audio: hasAudio ? {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                } : false,
                 video: !audioOnly && hasVideo ? {
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
+                    width: { ideal: 640, max: 1280 },
+                    height: { ideal: 480, max: 720 },
+                    frameRate: { ideal: 20, max: 30 }
                 } : false
             };
 
             // If no devices are available, throw error
             if (!hasAudio && (!hasVideo || audioOnly)) {
-                throw new Error('No audio or video devices found');
+                throw new Error('Không tìm thấy thiết bị audio hoặc video');
             }
 
-            // Try to get the stream
+            console.log('Đang yêu cầu stream với constraints:', constraints);
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            
+            // Verify that we got tracks
+            const audioTracks = stream.getAudioTracks();
+            const videoTracks = stream.getVideoTracks();
+            
+            console.log('Stream đã nhận:', {
+                audioTracks: audioTracks.length,
+                videoTracks: videoTracks.length
+            });
+
             return stream;
         } catch (error) {
-            console.error('Media setup error:', error);
+            console.error('Lỗi thiết lập media:', error);
 
             // Try fallback to audio only if video fails
             if (!audioOnly && error.name === 'NotFoundError') {
-                console.log('Falling back to audio only...');
+                console.log('Chuyển sang chế độ chỉ audio...');
                 return this.setupMediaStream(true);
             }
 
-            this.handleCallError(error, 'setupMediaStream');
+            // Show user-friendly error message
+            let errorMessage = 'Lỗi không xác định khi thiết lập media';
+            switch (error.name) {
+                case 'NotAllowedError':
+                    errorMessage = 'Vui lòng cho phép truy cập camera và microphone';
+                    break;
+                case 'NotFoundError':
+                    errorMessage = 'Không tìm thấy camera hoặc microphone';
+                    break;
+                case 'NotReadableError':
+                    errorMessage = 'Camera hoặc microphone đang được sử dụng bởi ứng dụng khác';
+                    break;
+                case 'OverconstrainedError':
+                    errorMessage = 'Không thể đáp ứng yêu cầu về chất lượng video';
+                    break;
+            }
+            this.showNotification(errorMessage, 'error');
             throw error;
         }
     }
@@ -918,241 +953,194 @@ class Chat {
     async initializePeerConnection(senderId) {
         console.log("Khởi tạo peer connection với:", senderId);
 
-        // Đóng kết nối cũ nếu có
-        if (this.peerConnection) {
-            this.peerConnection.close();
-            this.peerConnection = null;
-        }
-
-        const configuration = {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' }
-            ],
-            iceTransportPolicy: 'all',
-            bundlePolicy: 'max-bundle',
-            rtcpMuxPolicy: 'require',
-            iceCandidatePoolSize: 1
-        };
-
-        this.peerConnection = new RTCPeerConnection(configuration);
-
-        // Xử lý ICE candidate
-        this.peerConnection.onicecandidate = function (event) {
-            if (event.candidate) {
-                console.log("Gửi ICE candidate đến:", senderId);
-                this.sendCallSignal(senderId, "candidate", event.candidate);
+        try {
+            // Đóng kết nối cũ nếu có
+            if (this.peerConnection) {
+                this.peerConnection.close();
+                this.peerConnection = null;
             }
-        }.bind(this);
 
-        // Xử lý kết nối ICE state
-        this.peerConnection.oniceconnectionstatechange = async function () {
-            console.log("ICE connection state:", this.peerConnection.iceConnectionState);
-            switch (this.peerConnection.iceConnectionState) {
-                case 'connected':
-                    this.reconnectAttempts = 0;
-                    this.showModal();
-                    document.getElementById("incoming-call").style.display = 'none';
-                    document.getElementById("call-interface").style.display = 'block';
-                    document.getElementById("connectionStatus").style.display = 'none';
-                    this.updateCallState(CallState.IN_CALL);
-                    this.startCallTimer();
-                    break;
-                case 'disconnected':
-                    console.log('Kết nối ICE bị ngắt');
-                    if (this.reconnectAttempts < this.MAX_RECONNECT_ATTEMPTS) {
-                        console.log(`Đang thử kết nối lại (lần ${this.reconnectAttempts + 1}/${this.MAX_RECONNECT_ATTEMPTS})`);
-                        document.getElementById("statusMessage").textContent = `Đang thử kết nối lại (${this.reconnectAttempts + 1}/${this.MAX_RECONNECT_ATTEMPTS})...`;
+            const configuration = {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    {
+                        urls: 'turn:numb.viagenie.ca',
+                        username: 'webrtc@live.com',
+                        credential: 'muazkh'
+                    }
+                ],
+                iceTransportPolicy: 'all',
+                bundlePolicy: 'max-bundle',
+                rtcpMuxPolicy: 'require',
+                iceCandidatePoolSize: 1
+            };
+
+            this.peerConnection = new RTCPeerConnection(configuration);
+            console.log("Peer Connection đã được tạo:", this.peerConnection);
+
+            // Xử lý ICE candidate
+            this.peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    console.log("Gửi ICE candidate đến:", senderId);
+                    this.sendCallSignal(senderId, "candidate", event.candidate);
+                }
+            };
+
+            // Xử lý kết nối ICE state
+            this.peerConnection.oniceconnectionstatechange = () => {
+                console.log("ICE connection state:", this.peerConnection.iceConnectionState);
+                document.getElementById("statusMessage").textContent = 
+                    `Trạng thái kết nối: ${this.peerConnection.iceConnectionState}`;
+
+                switch (this.peerConnection.iceConnectionState) {
+                    case 'checking':
                         document.getElementById("connectionStatus").style.display = 'block';
-                        
-                        // Thử kết nối lại sau 1 giây
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                        
-                        try {
-                            // Tạo offer mới
-                            const offer = await this.peerConnection.createOffer();
-                            await this.peerConnection.setLocalDescription(offer);
-                            
-                            // Gửi offer mới đến peer
-                            this.sendCallSignal(this.currentCallerId, "offer", {
-                                type: 'offer',
-                                sdp: offer.sdp,
-                                senderName: document.getElementById("currentUser").getAttribute("data-username")
-                            });
-                            
-                            this.reconnectAttempts++;
-                        } catch (error) {
-                            console.error("Lỗi khi thử kết nối lại:", error);
+                        document.getElementById("statusMessage").textContent = 'Đang kiểm tra kết nối...';
+                        break;
+                    
+                    case 'connected':
+                        this.reconnectAttempts = 0;
+                        document.getElementById("connectionStatus").style.display = 'none';
+                        document.getElementById("call-interface").style.display = 'block';
+                        this.updateCallState(CallState.IN_CALL);
+                        this.startCallTimer();
+                        break;
+
+                    case 'disconnected':
+                        if (this.reconnectAttempts < this.MAX_RECONNECT_ATTEMPTS) {
+                            this.handleReconnection(senderId);
+                        } else {
+                            console.log('Đã vượt quá số lần thử kết nối lại');
                             this.endCall();
                         }
-                    } else {
-                        console.log('Đã vượt quá số lần thử kết nối lại');
+                        break;
+
+                    case 'failed':
+                        this.handleCallError(new Error('Kết nối cuộc gọi thất bại'), 'iceConnection');
+                        break;
+
+                    case 'closed':
                         this.endCall();
-                    }
-                    break;
-                case 'failed':
-                    console.log('Kết nối ICE thất bại');
-                    this.handleCallError(new Error('Kết nối cuộc gọi thất bại'), 'iceConnection');
-                    this.endCall();
-                    break;
-                case 'closed':
-                    console.log('Kết nối ICE đã đóng');
-                    this.endCall();
-                    break;
-            }
-        }.bind(this);
+                        break;
+                }
+            };
 
-        // Xử lý remote stream
-        this.peerConnection.ontrack = async function (event) {
-            console.log("Nhận track từ peer:", event);
-            const remoteVideo = document.getElementById("remoteVideo");
-            if (remoteVideo && event.streams && event.streams[0]) {
-                try {
-                    // Dừng stream cũ nếu có
-                    if (remoteVideo.srcObject) {
-                        const oldStream = remoteVideo.srcObject;
-                        oldStream.getTracks().forEach(track => track.stop());
-                    }
+            // Xử lý remote stream
+            this.peerConnection.ontrack = async (event) => {
+                console.log("Nhận track từ peer:", event);
+                const remoteVideo = document.getElementById("remoteVideo");
+                
+                if (remoteVideo && event.streams && event.streams[0]) {
+                    try {
+                        // Dừng stream cũ nếu có
+                        if (remoteVideo.srcObject) {
+                            const oldStream = remoteVideo.srcObject;
+                            oldStream.getTracks().forEach(track => track.stop());
+                        }
 
-                    // Reset video element
-                    remoteVideo.srcObject = null;
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                        // Reset video element
+                        remoteVideo.srcObject = null;
+                        remoteVideo.load();
 
-                    // Gán stream mới
-                    console.log("Đang thiết lập remote stream");
-                    remoteVideo.srcObject = event.streams[0];
+                        // Gán stream mới
+                        console.log("Đang thiết lập remote stream");
+                        remoteVideo.srcObject = event.streams[0];
 
-                    // Đợi video load xong metadata
-                    await new Promise((resolve) => {
-                        remoteVideo.onloadedmetadata = () => {
-                            console.log("Remote video metadata loaded");
-                            resolve();
-                        };
-                    });
+                        // Đợi video load xong metadata
+                        await new Promise((resolve) => {
+                            remoteVideo.onloadedmetadata = resolve;
+                        });
 
-                    // Play video
-                    console.log("Bắt đầu play remote video");
-                    await remoteVideo.play();
-                    console.log("Remote video đang chạy");
+                        // Play video
+                        await remoteVideo.play();
+                        console.log("Remote video đang chạy");
 
-                    // Thiết lập audio indicator
-                    this.setupAudioLevelIndicator(event.streams[0], "remoteVideo");
-                } catch (error) {
-                    console.error("Lỗi khi xử lý remote stream:", error);
-                    if (error.name === 'AbortError') {
-                        console.log("Thử lại play remote video sau 500ms");
-                        setTimeout(async () => {
+                    } catch (error) {
+                        console.error("Lỗi khi xử lý remote stream:", error);
+                        if (error.name === 'AbortError') {
+                            console.log("Thử lại play remote video sau 500ms");
+                            await new Promise(resolve => setTimeout(resolve, 500));
                             try {
                                 await remoteVideo.play();
-                                console.log("Play remote video thành công sau khi thử lại");
                             } catch (retryError) {
-                                console.error("Vẫn không thể play remote video:", retryError);
+                                console.error("Không thể play remote video:", retryError);
+                                this.showNotification('Không thể hiển thị video từ người dùng khác', 'warning');
                             }
-                        }, 500);
+                        }
                     }
                 }
-            }
-        }.bind(this);
+            };
 
-        try {
-            // Thử lấy cả audio và video
+            // Thiết lập local stream
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    audio: true,
-                    video: true
-                });
+                const stream = await this.setupMediaStream();
+                console.log("Local stream đã được thiết lập");
 
-                // Thêm track vào peer connection
+                // Thêm tracks vào peer connection
                 stream.getTracks().forEach(track => {
                     this.peerConnection.addTrack(track, stream);
+                    console.log(`Đã thêm track ${track.kind} vào peer connection`);
                 });
 
                 // Hiển thị local video
                 const localVideo = document.getElementById("localVideo");
                 if (localVideo) {
                     localVideo.srcObject = stream;
-                    localVideo.play().catch(err => console.error("Lỗi khi play local video:", err));
-
-                    // Thiết lập audio indicator cho local video
-                    this.setupAudioLevelIndicator(stream, "localVideo");
+                    try {
+                        await localVideo.play();
+                        console.log("Local video đang chạy");
+                    } catch (error) {
+                        console.error("Lỗi khi play local video:", error);
+                        this.showNotification('Không thể hiển thị video của bạn', 'warning');
+                    }
                 }
-            } catch (videoError) {
-                console.log("Không thể lấy video, thử chỉ lấy audio:", videoError);
-                const audioStream = await navigator.mediaDevices.getUserMedia({
-                    audio: true,
-                    video: false
-                });
 
-                // Thêm track vào peer connection
-                audioStream.getTracks().forEach(track => {
-                    this.peerConnection.addTrack(track, audioStream);
-                });
-
-                // Hiển thị local audio
-                const localVideo = document.getElementById("localVideo");
-                if (localVideo) {
-                    localVideo.srcObject = audioStream;
-                    localVideo.style.backgroundColor = "#333";
-                    localVideo.style.display = "flex";
-                    localVideo.style.alignItems = "center";
-                    localVideo.style.justifyContent = "center";
-
-                    // Thêm icon microphone
-                    const micIcon = document.createElement("i");
-                    micIcon.className = "fas fa-microphone fa-3x text-white";
-                    localVideo.appendChild(micIcon);
-
-                    // Thiết lập audio indicator cho local video (audio only)
-                    this.setupAudioLevelIndicator(audioStream, "localVideo");
+            } catch (error) {
+                console.error("Lỗi khi thiết lập local stream:", error);
+                // Nếu lỗi video, thử lại với audio only
+                if (!this.isAudioOnlyCall) {
+                    this.isAudioOnlyCall = true;
+                    return this.initializePeerConnection(senderId);
                 }
+                throw error;
             }
+
+            return this.peerConnection;
         } catch (error) {
-            console.error("Không thể truy cập thiết bị media:", error);
-            this.showNotification('Không thể truy cập micro hoặc camera. Vui lòng kiểm tra quyền truy cập thiết bị.', 'warning');
+            console.error("Lỗi khởi tạo peer connection:", error);
+            this.handleCallError(error, 'initializePeerConnection');
             throw error;
         }
-
-        return this.peerConnection;
     }
 
-    setupAudioLevelIndicator(stream, elementId) {
-        if (!stream) return;
-
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const analyser = audioContext.createAnalyser();
-        const microphone = audioContext.createMediaStreamSource(stream);
-        microphone.connect(analyser);
-
-        analyser.fftSize = 256;
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-
-        const indicator = document.querySelector(`#${elementId} .audio-indicator`);
-        if (!indicator) return;
-
-        function updateAudioLevel() {
-            analyser.getByteFrequencyData(dataArray);
-            let values = 0;
-            const length = dataArray.length;
-            for (let i = 0; i < length; i++) {
-                values += dataArray[i];
-            }
-            const average = values / length;
-
-            // Cập nhật màu sắc dựa trên mức độ âm thanh
-            if (average > 50) {
-                indicator.style.backgroundColor = '#4CAF50'; // Xanh lá khi có tiếng nói
-            } else if (average > 20) {
-                indicator.style.backgroundColor = '#FFC107'; // Vàng khi có âm thanh nhỏ
-            } else {
-                indicator.style.backgroundColor = '#757575'; // Xám khi im lặng
-            }
-
-            requestAnimationFrame(updateAudioLevel);
+    async handleReconnection(senderId) {
+        console.log(`Đang thử kết nối lại (lần ${this.reconnectAttempts + 1}/${this.MAX_RECONNECT_ATTEMPTS})`);
+        document.getElementById("statusMessage").textContent = 
+            `Đang thử kết nối lại (${this.reconnectAttempts + 1}/${this.MAX_RECONNECT_ATTEMPTS})...`;
+        document.getElementById("connectionStatus").style.display = 'block';
+        
+        try {
+            // Đợi 1 giây trước khi thử lại
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Tạo offer mới
+            const offer = await this.peerConnection.createOffer();
+            await this.peerConnection.setLocalDescription(offer);
+            
+            // Gửi offer mới
+            this.sendCallSignal(senderId, "offer", {
+                type: 'offer',
+                sdp: offer.sdp,
+                senderName: document.getElementById("currentUser").getAttribute("data-username")
+            });
+            
+            this.reconnectAttempts++;
+        } catch (error) {
+            console.error("Lỗi khi thử kết nối lại:", error);
+            this.endCall();
         }
-
-        updateAudioLevel();
     }
 
     selectContact(userId, userName, userImage) {
