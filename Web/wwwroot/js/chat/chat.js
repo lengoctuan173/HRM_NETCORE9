@@ -572,7 +572,7 @@ class Chat {
 
             if (!this.peerConnection) {
                 console.log("Khởi tạo peer connection mới khi nhận answer");
-                await this.initializePeerConnection(senderId);
+                this.initializePeerConnection(senderId);
             }
 
             const answerDesc = new RTCSessionDescription({
@@ -582,7 +582,6 @@ class Chat {
             
             console.log("Setting remote description (answer):", answerDesc);
             await this.peerConnection.setRemoteDescription(answerDesc);
-            
             // Hiển thị modal cho người gọi
             this.showModal();
             document.getElementById("call-interface").style.display = 'block';
