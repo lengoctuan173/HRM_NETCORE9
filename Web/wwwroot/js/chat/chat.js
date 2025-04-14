@@ -433,7 +433,7 @@ class Chat {
         }
     }
 
-    handleIncomingCall(senderId, offerData) {
+    async handleIncomingCall(senderId, offerData) {
         console.log("Xử lý cuộc gọi đến từ:", senderId, "State hiện tại:", this.currentCallState);
         console.log("Offer data received:", offerData);
 
@@ -441,7 +441,7 @@ class Chat {
             // Cập nhật UI cuộc gọi đến
             let callerName = offerData.senderName ?? "Unknown User";
             document.getElementById("callerName").textContent = callerName;
-
+            
             // Hiển thị giao diện cuộc gọi đến
             document.getElementById("incoming-call").style.display = 'block';
             document.getElementById("call-interface").style.display = 'none';
@@ -470,7 +470,7 @@ class Chat {
                 if (timeoutElement) {
                     timeoutElement.textContent = timeoutCounter;
                 }
-
+                
                 if (timeoutCounter <= 0) {
                     clearInterval(this.incomingCallTimeout);
                     if (!this.callAccepted) {
@@ -486,46 +486,54 @@ class Chat {
             // Xóa event listeners cũ
             const acceptButton = document.getElementById("acceptCallButton");
             const rejectButton = document.getElementById("rejectCallButton");
-
+            
             const newAcceptButton = acceptButton.cloneNode(true);
             const newRejectButton = rejectButton.cloneNode(true);
-
+            
             acceptButton.parentNode.replaceChild(newAcceptButton, acceptButton);
             rejectButton.parentNode.replaceChild(newRejectButton, rejectButton);
 
             // Thêm event listeners mới
-            newAcceptButton.addEventListener("click", async function () {
+            newAcceptButton.addEventListener("click", async () => {
                 try {
                     console.log("Chấp nhận cuộc gọi từ:", senderId);
                     if (!this.callAccepted) {
                         clearInterval(this.incomingCallTimeout);
                         this.callAccepted = true;
 
-                        // Khởi tạo peer connection khi chấp nhận cuộc gọi
+                        // Khởi tạo peer connection trước khi xử lý offer
                         await this.initializePeerConnection(senderId);
 
                         // Kiểm tra và set remote description từ offer
                         if (offerData && offerData.type === 'offer' && offerData.sdp) {
                             console.log("Setting remote description from offer");
-                            await this.peerConnection.setRemoteDescription(new RTCSessionDescription({
+                            const offerDesc = new RTCSessionDescription({
                                 type: 'offer',
                                 sdp: offerData.sdp
-                            }));
-
+                            });
+                            
+                            await this.peerConnection.setRemoteDescription(offerDesc);
+                            
                             // Tạo answer
                             console.log("Creating answer");
                             const answer = await this.peerConnection.createAnswer();
-
+                            
                             // Set local description
                             console.log("Setting local description");
                             await this.peerConnection.setLocalDescription(answer);
-
+                            
                             // Gửi answer về cho người gọi
                             console.log("Sending answer");
                             await this.sendCallSignal(senderId, "answer", {
                                 type: 'answer',
                                 sdp: answer.sdp
                             });
+
+                            // Hiển thị giao diện cuộc gọi
+                            document.getElementById("incoming-call").style.display = 'none';
+                            document.getElementById("call-interface").style.display = 'block';
+                            document.getElementById("connectionStatus").style.display = 'block';
+                            document.getElementById("statusMessage").textContent = 'Đang thiết lập kết nối...';
                         } else {
                             throw new Error("Invalid offer data received");
                         }
@@ -534,16 +542,16 @@ class Chat {
                     console.error("Lỗi khi chấp nhận cuộc gọi:", error);
                     this.handleCallError(error, 'acceptCall');
                 }
-            }.bind(this));
+            });
 
-            newRejectButton.addEventListener("click", function () {
+            newRejectButton.addEventListener("click", () => {
                 console.log("Từ chối cuộc gọi từ:", senderId);
                 clearInterval(this.incomingCallTimeout);
                 this.sendCallSignal(senderId, "reject", null);
                 this.closeModal();
                 this.updateCallState(CallState.IDLE);
                 this.currentCallerId = null;
-            }.bind(this));
+            });
 
         } catch (error) {
             console.error("Lỗi khi xử lý cuộc gọi đến:", error);
