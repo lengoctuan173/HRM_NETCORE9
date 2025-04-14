@@ -433,7 +433,7 @@ class Chat {
         }
     }
 
-    handleIncomingCall(senderId, offerData) {
+    async handleIncomingCall(senderId, offerData) {
         console.log("Xử lý cuộc gọi đến từ:", senderId, "State hiện tại:", this.currentCallState);
         console.log("Offer data received:", offerData);
 
@@ -494,23 +494,25 @@ class Chat {
             rejectButton.parentNode.replaceChild(newRejectButton, rejectButton);
 
             // Thêm event listeners mới
-            newAcceptButton.addEventListener("click", async function () {
+            newAcceptButton.addEventListener("click", async () => {
                 try {
                     console.log("Chấp nhận cuộc gọi từ:", senderId);
                     if (!this.callAccepted) {
                         clearInterval(this.incomingCallTimeout);
                         this.callAccepted = true;
 
-                        // Khởi tạo peer connection khi chấp nhận cuộc gọi
+                        // Khởi tạo peer connection trước khi xử lý offer
                         await this.initializePeerConnection(senderId);
 
                         // Kiểm tra và set remote description từ offer
                         if (offerData && offerData.type === 'offer' && offerData.sdp) {
                             console.log("Setting remote description from offer");
-                            await this.peerConnection.setRemoteDescription(new RTCSessionDescription({
+                            const offerDesc = new RTCSessionDescription({
                                 type: 'offer',
                                 sdp: offerData.sdp
-                            }));
+                            });
+                            
+                            await this.peerConnection.setRemoteDescription(offerDesc);
                             
                             // Tạo answer
                             console.log("Creating answer");
@@ -526,6 +528,12 @@ class Chat {
                                 type: 'answer',
                                 sdp: answer.sdp
                             });
+
+                            // Hiển thị giao diện cuộc gọi
+                            document.getElementById("incoming-call").style.display = 'none';
+                            document.getElementById("call-interface").style.display = 'block';
+                            document.getElementById("connectionStatus").style.display = 'block';
+                            document.getElementById("statusMessage").textContent = 'Đang thiết lập kết nối...';
                         } else {
                             throw new Error("Invalid offer data received");
                         }
@@ -534,16 +542,16 @@ class Chat {
                     console.error("Lỗi khi chấp nhận cuộc gọi:", error);
                     this.handleCallError(error, 'acceptCall');
                 }
-            }.bind(this));
+            });
 
-            newRejectButton.addEventListener("click", function () {
+            newRejectButton.addEventListener("click", () => {
                 console.log("Từ chối cuộc gọi từ:", senderId);
                 clearInterval(this.incomingCallTimeout);
                 this.sendCallSignal(senderId, "reject", null);
                 this.closeModal();
                 this.updateCallState(CallState.IDLE);
                 this.currentCallerId = null;
-            }.bind(this));
+            });
 
         } catch (error) {
             console.error("Lỗi khi xử lý cuộc gọi đến:", error);
@@ -911,40 +919,43 @@ class Chat {
 
         const configuration = {
             iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
                 { 
-                    urls: 'turn:numb.viagenie.ca',
-                    username: 'webrtc@live.com',
-                    credential: 'muazkh'
+                    urls: [
+                        'stun:stun.l.google.com:19302',
+                        'stun:stun1.l.google.com:19302',
+                        'stun:stun2.l.google.com:19302'
+                    ]
                 }
             ],
             iceTransportPolicy: 'all',
             bundlePolicy: 'max-bundle',
             rtcpMuxPolicy: 'require',
-            iceCandidatePoolSize: 0
+            sdpSemantics: 'unified-plan'
         };
 
         this.peerConnection = new RTCPeerConnection(configuration);
 
         // Log trạng thái connection
         this.peerConnection.onconnectionstatechange = () => {
-            console.log("Connection state:", this.peerConnection.connectionState);
+            const state = this.peerConnection.connectionState;
+            console.log("Connection state:", state);
+            document.getElementById("statusMessage").textContent = `Trạng thái kết nối: ${state}`;
         };
 
+        // Log trạng thái ICE gathering
         this.peerConnection.onicegatheringstatechange = () => {
             console.log("ICE gathering state:", this.peerConnection.iceGatheringState);
         };
 
         // Xử lý ICE candidate
-        this.peerConnection.onicecandidate = function (event) {
+        this.peerConnection.onicecandidate = (event) => {
             if (event.candidate) {
                 console.log("Gửi ICE candidate đến:", senderId, event.candidate);
                 this.sendCallSignal(senderId, "candidate", event.candidate);
             } else {
                 console.log("Đã hoàn thành việc thu thập ICE candidates");
             }
-        }.bind(this);
+        };
 
         // Xử lý kết nối ICE state
         this.peerConnection.oniceconnectionstatechange = function() {
