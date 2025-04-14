@@ -99,6 +99,15 @@ builder.Services.AddAuthentication(options =>
                 context.Token = token;
             }
             return Task.CompletedTask;
+        },
+        OnChallenge = context =>
+        {
+            // Ngăn không trả về lỗi 401 mặc định
+            context.HandleResponse();
+
+            // Chuyển hướng về trang login nếu không có token hoặc token sai
+            context.Response.Redirect("/Login");
+            return Task.CompletedTask;
         }
     };
 })
