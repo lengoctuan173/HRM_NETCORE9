@@ -958,17 +958,53 @@ class Chat {
         }.bind(this);
 
         // Xử lý remote stream
-        this.peerConnection.ontrack = function (event) {
+        this.peerConnection.ontrack = async function (event) {
             console.log("Nhận track từ peer:", event);
             const remoteVideo = document.getElementById("remoteVideo");
-            if (remoteVideo) {
-                if (event.streams && event.streams[0]) {
-                    console.log("Đã nhận remote stream");
-                    remoteVideo.srcObject = event.streams[0];
-                    remoteVideo.play().catch(err => console.error("Lỗi khi play remote video:", err));
+            if (remoteVideo && event.streams && event.streams[0]) {
+                try {
+                    // Dừng stream cũ nếu có
+                    if (remoteVideo.srcObject) {
+                        const oldStream = remoteVideo.srcObject;
+                        oldStream.getTracks().forEach(track => track.stop());
+                    }
 
-                    // Thiết lập audio indicator cho remote video
+                    // Reset video element
+                    remoteVideo.srcObject = null;
+                    await new Promise(resolve => setTimeout(resolve, 100));
+
+                    // Gán stream mới
+                    console.log("Đang thiết lập remote stream");
+                    remoteVideo.srcObject = event.streams[0];
+                    
+                    // Đợi video load xong metadata
+                    await new Promise((resolve) => {
+                        remoteVideo.onloadedmetadata = () => {
+                            console.log("Remote video metadata loaded");
+                            resolve();
+                        };
+                    });
+
+                    // Play video
+                    console.log("Bắt đầu play remote video");
+                    await remoteVideo.play();
+                    console.log("Remote video đang chạy");
+
+                    // Thiết lập audio indicator
                     this.setupAudioLevelIndicator(event.streams[0], "remoteVideo");
+                } catch (error) {
+                    console.error("Lỗi khi xử lý remote stream:", error);
+                    if (error.name === 'AbortError') {
+                        console.log("Thử lại play remote video sau 500ms");
+                        setTimeout(async () => {
+                            try {
+                                await remoteVideo.play();
+                                console.log("Play remote video thành công sau khi thử lại");
+                            } catch (retryError) {
+                                console.error("Vẫn không thể play remote video:", retryError);
+                            }
+                        }, 500);
+                    }
                 }
             }
         }.bind(this);
