@@ -940,7 +940,8 @@ class Chat {
                     break;
                 case 'disconnected':
                     console.log('Kết nối ICE bị ngắt');
-                    this.endCall();
+                    document.getElementById("statusMessage").textContent = 'Kết nối bị ngắt...';
+                    document.getElementById("connectionStatus").style.display = 'block';
                     break;
                 case 'failed':
                     console.log('Kết nối ICE thất bại');
@@ -951,35 +952,18 @@ class Chat {
         }.bind(this);
 
         // Xử lý remote stream
-        this.peerConnection.ontrack = async function (event) {
+        this.peerConnection.ontrack = function (event) {
             console.log("Nhận track từ peer:", event);
             const remoteVideo = document.getElementById("remoteVideo");
-            if (remoteVideo && event.streams && event.streams[0]) {
-                try {
+            if (remoteVideo) {
+                if (event.streams && event.streams[0]) {
                     console.log("Đã nhận remote stream");
-                    // Đảm bảo video element được reset trước khi set stream mới
-                    remoteVideo.srcObject = null;
-                    remoteVideo.load();
-                    
-                    // Set stream mới
                     remoteVideo.srcObject = event.streams[0];
                     remoteVideo.style.display = "block";
+                    remoteVideo.play().catch(err => console.error("Lỗi khi play remote video:", err));
                     
-                    // Đợi video element sẵn sàng
-                    await new Promise((resolve) => {
-                        remoteVideo.onloadedmetadata = () => {
-                            resolve();
-                        };
-                    });
-                    
-                    // Play video
-                    await remoteVideo.play();
-                    console.log("Remote video đã bắt đầu phát");
-                    
-                    // Thiết lập audio indicator
+                    // Thiết lập audio indicator cho remote video
                     this.setupAudioLevelIndicator(event.streams[0], "remoteVideo");
-                } catch (err) {
-                    console.error("Lỗi khi xử lý remote stream:", err);
                 }
             }
         }.bind(this);
@@ -1001,7 +985,7 @@ class Chat {
                 const localVideo = document.getElementById("localVideo");
                 if (localVideo) {
                     localVideo.srcObject = stream;
-                    await localVideo.play().catch(err => console.error("Lỗi khi play local video:", err));
+                    localVideo.play().catch(err => console.error("Lỗi khi play local video:", err));
                     
                     // Thiết lập audio indicator cho local video
                     this.setupAudioLevelIndicator(stream, "localVideo");
