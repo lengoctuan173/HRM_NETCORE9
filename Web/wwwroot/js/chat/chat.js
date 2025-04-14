@@ -586,7 +586,17 @@ class Chat {
             const remoteVideo = document.getElementById("remoteVideo");
             if (remoteVideo) {
                 remoteVideo.style.display = "block";
-                remoteVideo.play().catch(err => console.error("Lỗi khi play remote video:", err));
+                // Kiểm tra và cập nhật remote video stream
+                if (this.peerConnection.getReceivers().length > 0) {
+                    const stream = new MediaStream();
+                    this.peerConnection.getReceivers().forEach(receiver => {
+                        if (receiver.track) {
+                            stream.addTrack(receiver.track);
+                        }
+                    });
+                    remoteVideo.srcObject = stream;
+                    remoteVideo.play().catch(err => console.error("Lỗi khi play remote video:", err));
+                }
             }
             
             console.log("Đã hoàn tất xử lý answer");
