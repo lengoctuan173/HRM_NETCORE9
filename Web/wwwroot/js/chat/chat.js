@@ -911,17 +911,38 @@ class Chat {
 
         const configuration = {
             iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' }
-            ]
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { 
+                    urls: 'turn:numb.viagenie.ca',
+                    username: 'webrtc@live.com',
+                    credential: 'muazkh'
+                }
+            ],
+            iceTransportPolicy: 'all',
+            bundlePolicy: 'max-bundle',
+            rtcpMuxPolicy: 'require',
+            iceCandidatePoolSize: 0
         };
 
         this.peerConnection = new RTCPeerConnection(configuration);
 
+        // Log trạng thái connection
+        this.peerConnection.onconnectionstatechange = () => {
+            console.log("Connection state:", this.peerConnection.connectionState);
+        };
+
+        this.peerConnection.onicegatheringstatechange = () => {
+            console.log("ICE gathering state:", this.peerConnection.iceGatheringState);
+        };
+
         // Xử lý ICE candidate
         this.peerConnection.onicecandidate = function (event) {
             if (event.candidate) {
-                console.log("Gửi ICE candidate đến:", senderId);
+                console.log("Gửi ICE candidate đến:", senderId, event.candidate);
                 this.sendCallSignal(senderId, "candidate", event.candidate);
+            } else {
+                console.log("Đã hoàn thành việc thu thập ICE candidates");
             }
         }.bind(this);
 
@@ -929,7 +950,14 @@ class Chat {
         this.peerConnection.oniceconnectionstatechange = function() {
             console.log("ICE connection state:", this.peerConnection.iceConnectionState);
             switch (this.peerConnection.iceConnectionState) {
+                case 'checking':
+                    console.log('Đang kiểm tra kết nối...');
+                    document.getElementById("statusMessage").textContent = 'Đang thiết lập kết nối...';
+                    document.getElementById("connectionStatus").style.display = 'block';
+                    break;
+
                 case 'connected':
+                    console.log('Kết nối thành công!');
                     // Khi kết nối thành công, hiển thị giao diện cuộc gọi cho cả hai bên
                     this.showModal();
                     document.getElementById("incoming-call").style.display = 'none';
@@ -938,14 +966,23 @@ class Chat {
                     this.updateCallState(CallState.IN_CALL);
                     this.startCallTimer();
                     break;
+
                 case 'disconnected':
                     console.log('Kết nối ICE bị ngắt');
                     document.getElementById("statusMessage").textContent = 'Kết nối bị ngắt...';
                     document.getElementById("connectionStatus").style.display = 'block';
+                    // Thử kết nối lại
+                    this.peerConnection.restartIce();
                     break;
+
                 case 'failed':
                     console.log('Kết nối ICE thất bại');
                     this.handleCallError(new Error('Kết nối cuộc gọi thất bại'), 'iceConnection');
+                    this.endCall();
+                    break;
+
+                case 'closed':
+                    console.log('Kết nối ICE đã đóng');
                     this.endCall();
                     break;
             }
@@ -955,16 +992,20 @@ class Chat {
         this.peerConnection.ontrack = function (event) {
             console.log("Nhận track từ peer:", event);
             const remoteVideo = document.getElementById("remoteVideo");
-            if (remoteVideo) {
-                if (event.streams && event.streams[0]) {
-                    console.log("Đã nhận remote stream");
-                    remoteVideo.srcObject = event.streams[0];
-                    remoteVideo.style.display = "block";
-                    remoteVideo.play().catch(err => console.error("Lỗi khi play remote video:", err));
-                    
-                    // Thiết lập audio indicator cho remote video
-                    this.setupAudioLevelIndicator(event.streams[0], "remoteVideo");
-                }
+            if (remoteVideo && event.streams && event.streams[0]) {
+                console.log("Đã nhận remote stream");
+                remoteVideo.srcObject = event.streams[0];
+                remoteVideo.style.display = "block";
+                
+                // Đảm bảo video được play khi đã load metadata
+                remoteVideo.onloadedmetadata = function() {
+                    remoteVideo.play()
+                        .then(() => console.log("Remote video playing"))
+                        .catch(err => console.error("Lỗi khi play remote video:", err));
+                };
+                
+                // Thiết lập audio indicator cho remote video
+                this.setupAudioLevelIndicator(event.streams[0], "remoteVideo");
             }
         }.bind(this);
 
@@ -972,12 +1013,20 @@ class Chat {
             // Thử lấy cả audio và video
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    audio: true,
-                    video: true
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    },
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
                 });
                 
                 // Thêm track vào peer connection
                 stream.getTracks().forEach(track => {
+                    console.log("Adding track:", track.kind);
                     this.peerConnection.addTrack(track, stream);
                 });
                 
@@ -985,7 +1034,11 @@ class Chat {
                 const localVideo = document.getElementById("localVideo");
                 if (localVideo) {
                     localVideo.srcObject = stream;
-                    localVideo.play().catch(err => console.error("Lỗi khi play local video:", err));
+                    localVideo.onloadedmetadata = function() {
+                        localVideo.play()
+                            .then(() => console.log("Local video playing"))
+                            .catch(err => console.error("Lỗi khi play local video:", err));
+                    };
                     
                     // Thiết lập audio indicator cho local video
                     this.setupAudioLevelIndicator(stream, "localVideo");
@@ -993,12 +1046,17 @@ class Chat {
             } catch (videoError) {
                 console.log("Không thể lấy video, thử chỉ lấy audio:", videoError);
                 const audioStream = await navigator.mediaDevices.getUserMedia({
-                    audio: true,
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    },
                     video: false
                 });
                 
                 // Thêm track vào peer connection
                 audioStream.getTracks().forEach(track => {
+                    console.log("Adding audio track");
                     this.peerConnection.addTrack(track, audioStream);
                 });
                 
