@@ -248,8 +248,8 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
+    padding:2px;
 }
-
 /* Sidebar */
 .chat-sidebar-wrap {
     width: 280px;
