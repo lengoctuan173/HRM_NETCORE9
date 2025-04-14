@@ -792,7 +792,7 @@ class Chat {
                         urls: ['stun:stun.l.google.com:19302']
                     }
                 ],
-                iceTransportPolicy: 'all',
+                iceTransportPolicy: 'relay',
                 bundlePolicy: 'max-bundle',
                 rtcpMuxPolicy: 'require',
                 iceCandidatePoolSize: 0,
@@ -830,6 +830,7 @@ class Chat {
                     case 'completed':
                         document.getElementById("connectionStatus").style.display = 'none';
                         document.getElementById("call-interface").style.display = 'block';
+                        this.reconnectAttempts = 0; // Reset số lần thử kết nối lại
                         
                         // Kiểm tra xem có video track không
                         const hasVideoTrack = this.peerConnection.getTransceivers().some(
@@ -870,18 +871,36 @@ class Chat {
                         document.getElementById("connectionStatus").style.display = 'block';
                         document.getElementById("statusMessage").textContent = 'Kết nối không ổn định...';
                         
-                        // Thử kết nối lại sau 1 giây
-                        setTimeout(() => {
-                            if (this.peerConnection?.iceConnectionState === 'disconnected') {
-                                this.restartIce();
-                            }
-                        }, 1000);
+                        // Thử kết nối lại nhiều lần với thời gian chờ tăng dần
+                        if (this.reconnectAttempts < this.MAX_RECONNECT_ATTEMPTS) {
+                            const delay = (this.reconnectAttempts + 1) * 2000; // 2s, 4s, 6s
+                            this.showNotification(`Đang thử kết nối lại (lần ${this.reconnectAttempts + 1})...`, 'warning');
+                            
+                            setTimeout(() => {
+                                if (this.peerConnection?.iceConnectionState === 'disconnected') {
+                                    this.reconnectAttempts++;
+                                    this.restartIce();
+                                }
+                            }, delay);
+                        } else {
+                            // Nếu đã thử kết nối lại nhiều lần không thành công
+                            this.showNotification('Không thể thiết lập lại kết nối sau nhiều lần thử', 'error');
+                            setTimeout(() => this.endCall(), 2000);
+                        }
                         break;
 
                     case 'failed':
                         console.log("Kết nối thất bại");
-                        this.showNotification('Kết nối cuộc gọi thất bại', 'error');
-                        this.endCall();
+                        // Chỉ kết thúc cuộc gọi nếu đã hết số lần thử kết nối lại
+                        if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
+                            this.showNotification('Kết nối cuộc gọi thất bại', 'error');
+                            this.endCall();
+                        } else {
+                            // Vẫn còn cơ hội thử kết nối lại
+                            this.reconnectAttempts++;
+                            this.showNotification(`Đang thử kết nối lại (lần ${this.reconnectAttempts})...`, 'warning');
+                            this.restartIce();
+                        }
                         break;
                 }
             };
@@ -889,7 +908,10 @@ class Chat {
             // Xử lý connection state
             this.peerConnection.onconnectionstatechange = () => {
                 console.log("Connection state:", this.peerConnection.connectionState);
-                if (this.peerConnection.connectionState === 'failed') {
+                
+                // Chỉ kết thúc cuộc gọi khi connection failed và đã hết số lần thử lại
+                if (this.peerConnection.connectionState === 'failed' && this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
+                    this.showNotification('Kết nối không thành công sau nhiều lần thử', 'error');
                     this.endCall();
                 }
             };
@@ -959,22 +981,32 @@ class Chat {
         try {
             if (this.peerConnection && this.currentCallerId) {
                 console.log("Đang thử khởi động lại kết nối ICE...");
+                
+                // Tạo offer với cấu hình ICE restart
                 const offer = await this.peerConnection.createOffer({ 
                     iceRestart: true,
                     offerToReceiveAudio: true,
                     offerToReceiveVideo: true
                 });
+                
                 await this.peerConnection.setLocalDescription(offer);
                 
+                // Gửi offer mới
                 this.sendCallSignal(this.currentCallerId, "offer", {
                     type: 'offer',
                     sdp: offer.sdp,
                     senderName: document.getElementById("currentUser").getAttribute("data-username")
                 });
+                
+                // Hiển thị thông báo
+                document.getElementById("connectionStatus").style.display = 'block';
+                document.getElementById("statusMessage").textContent = 'Đang thử kết nối lại...';
             }
         } catch (error) {
             console.error("Lỗi khi restart ICE:", error);
-            this.endCall();
+            if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
+                this.endCall();
+            }
         }
     }
 
