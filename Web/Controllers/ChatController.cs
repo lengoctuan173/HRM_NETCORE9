@@ -2,6 +2,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Web.Hubs;
+using Twilio;
+using Twilio.Rest.Api.V2010.Account;
 
 namespace Web.Controllers
 {
@@ -9,10 +11,12 @@ namespace Web.Controllers
     public class ChatController : Controller
     {
         private readonly IHubContext<ChatHub> _chatHubContext;
+        private readonly IConfiguration _configuration;
 
-        public ChatController(IHubContext<ChatHub> chatHubContext)
+        public ChatController(IHubContext<ChatHub> chatHubContext, IConfiguration configuration)
         {
             _chatHubContext = chatHubContext; // Inject SignalR Hub
+            _configuration = configuration;
         }
         public IActionResult Index()
         {
@@ -54,6 +58,38 @@ namespace Web.Controllers
             });
 
             return Ok(new { success = true, fileUrl });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetTwilioToken()
+        {
+            try
+            {
+                var accountSid = _configuration["Twilio:AccountSid"];
+                var authToken = _configuration["Twilio:AuthToken"];
+
+                // Khởi tạo Twilio client
+                TwilioClient.Init(accountSid, authToken);
+
+                // Tạo token sử dụng TokenResource
+                var token = await TokenResource.CreateAsync();
+
+                // Lấy thông tin từ token
+                return Json(new { 
+                    token = token.IceServers.First().Url, // Lấy URL của STUN server
+                    ttl = 3600, // 1 giờ
+                    iceServers = token.IceServers.Select(server => new
+                    {
+                        urls = new[] { server.Url },
+                        username = server.Username,
+                        credential = server.Credential
+                    }).ToArray()
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
         }
     }
 }

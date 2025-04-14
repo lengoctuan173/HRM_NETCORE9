@@ -277,40 +277,77 @@ class Chat {
                 case "answer":
                     console.log("Nhận tín hiệu answer từ:", senderId);
                     if (this.currentCallState === CallState.CALLING || this.currentCallState === CallState.IDLE) {
-                        this.handleCallAnswer(senderId, signalData);
-                        this.updateCallState(CallState.IN_CALL);
-                        document.getElementById("call-interface").style.display = 'block';
-                        this.startCallTimer();
+                        await this.handleCallAnswer(senderId, signalData);
                     }
+                    break;
+
+                case "connection_established":
+                    console.log("Nhận tín hiệu kết nối thành công từ:", senderId);
+                    // Cập nhật UI cho bên nhận khi kết nối đã được thiết lập
+                    document.getElementById("connectionStatus").style.display = 'none';
+                    document.getElementById("call-interface").style.display = 'block';
+                    this.updateCallState(CallState.IN_CALL);
+                    this.startCallTimer();
                     break;
 
                 case "candidate":
                     console.log("Nhận ICE candidate từ:", senderId);
-                    if (!this.peerConnection) {
+                    if (!this.peerConnection || !this.peerConnection.remoteDescription) {
                         console.log("Lưu trữ ICE candidate để xử lý sau");
                         this.pendingCandidates.push({
                             senderId: senderId,
                             candidate: signalData
                         });
-                    } else if (this.currentCallState === CallState.CALLING || this.currentCallState === CallState.IN_CALL) {
-                        try {
-                            await this.peerConnection.addIceCandidate(new RTCIceCandidate(signalData));
-                            console.log("Đã thêm ICE candidate");
-                        } catch (error) {
-                            console.error("Lỗi khi thêm ICE candidate:", error);
-                        }
-                    } else {
-                        console.log("Bỏ qua candidate vì không trong cuộc gọi");
+                        return;
+                    }
+
+                    try {
+                        await this.peerConnection.addIceCandidate(new RTCIceCandidate(signalData));
+                        console.log("Đã thêm ICE candidate thành công");
+                    } catch (error) {
+                        console.error("Lỗi khi thêm ICE candidate:", error);
                     }
                     break;
 
                 case "end":
                     console.log("Nhận tín hiệu kết thúc từ:", senderId);
-                    if (this.currentCallState === CallState.CALLING || 
-                        this.currentCallState === CallState.IN_CALL) {
-                        // Kết thúc cuộc gọi với initiatorId là người gửi tín hiệu kết thúc
-                        this.endCall(senderId);
+                    // Đảm bảo kết thúc cuộc gọi cho cả hai bên
+                    this.closeModal();
+                    this.updateCallState(CallState.ENDING);
+                    
+                    // Dừng media streams
+                    const localVideo = document.getElementById("localVideo");
+                    const remoteVideo = document.getElementById("remoteVideo");
+                    
+                    if (localVideo && localVideo.srcObject) {
+                        localVideo.srcObject.getTracks().forEach(track => track.stop());
+                        localVideo.srcObject = null;
                     }
+                    
+                    if (remoteVideo && remoteVideo.srcObject) {
+                        remoteVideo.srcObject.getTracks().forEach(track => track.stop());
+                        remoteVideo.srcObject = null;
+                    }
+                    
+                    // Đóng peer connection
+                    if (this.peerConnection) {
+                        this.peerConnection.close();
+                        this.peerConnection = null;
+                    }
+                    
+                    // Reset các trạng thái
+                    this.currentCallState = CallState.IDLE;
+                    this.currentCallerId = null;
+                    this.callAccepted = false;
+                    this.stopCallTimer();
+                    
+                    // Cập nhật UI
+                    document.getElementById("connectionStatus").style.display = 'none';
+                    document.getElementById("call-interface").style.display = 'none';
+                    document.getElementById("incoming-call").style.display = 'none';
+                    
+                    // Hiển thị thông báo
+                    this.showNotification('Cuộc gọi đã kết thúc', 'info');
                     break;
 
                 case "busy":
@@ -613,10 +650,32 @@ class Chat {
             await this.peerConnection.setRemoteDescription(answerDesc);
             console.log("Đã set remote description từ answer");
 
+            // Xử lý các pending candidates sau khi set remote description
+            if (this.pendingCandidates.length > 0) {
+                console.log("Xử lý", this.pendingCandidates.length, "ICE candidates đang chờ");
+                for (const pendingCandidate of this.pendingCandidates) {
+                    if (pendingCandidate.senderId === senderId) {
+                        try {
+                            await this.peerConnection.addIceCandidate(
+                                new RTCIceCandidate(pendingCandidate.candidate)
+                            );
+                            console.log("Đã thêm pending ICE candidate thành công");
+                        } catch (error) {
+                            console.error("Lỗi khi thêm pending ICE candidate:", error);
+                        }
+                    }
+                }
+                this.pendingCandidates = []; // Xóa các candidates đã xử lý
+            }
+
+            // Cập nhật UI cho người gọi
             document.getElementById("call-interface").style.display = 'block';
-            document.getElementById("connectionStatus").style.display = 'block';
-            document.getElementById("statusMessage").textContent = 'Đang thiết lập kết nối...';
+            document.getElementById("connectionStatus").style.display = 'none';
             document.getElementById("incoming-call").style.display = 'none';
+
+            // Cập nhật trạng thái cuộc gọi
+            this.updateCallState(CallState.IN_CALL);
+            this.startCallTimer();
 
         } catch (error) {
             console.error("Lỗi khi xử lý answer:", error);
@@ -629,23 +688,32 @@ class Chat {
             await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offerData));
             const answer = await this.peerConnection.createAnswer();
             await this.peerConnection.setLocalDescription(answer);
-            this.sendSignal('answer', answer);
+            this.sendCallSignal(senderId, "answer", {
+                type: 'answer',
+                sdp: answer.sdp,
+                senderName: document.getElementById("currentUser").getAttribute("data-username")
+            });
         } catch (error) {
             console.error("Lỗi khi xử lý reconnect offer:", error);
             this.endCall();
         }
     }
 
-    sendSignal(type, data) {
-        let senderId = document.getElementById("currentUser").value;
-        let receiverId = document.getElementById("selectedUser").value;
+    sendCallSignal(receiverId, signalType, signalData) {
+        console.log("Gửi tín hiệu cuộc gọi:", { receiverId, signalType, signalData });
 
-        this.connection.invoke("SendCallSignal", senderId, receiverId, type, data)
+        // Lấy thông tin người gửi
+        const senderId = document.getElementById("currentUser").value;
+        const senderName = document.getElementById("currentUser").getAttribute("data-username");
+
+        // Gửi tín hiệu đến server
+        this.connection.invoke("SendCallSignal", senderId, receiverId, signalType, signalData)
             .then(() => {
-                console.log("✅ Tín hiệu WebRTC đã được gửi thành công.");
+                console.log("✅ Tín hiệu cuộc gọi đã được gửi thành công");
             })
-            .catch(function (err) {
-                console.error("❌ Lỗi gửi tín hiệu WebRTC:", err.toString());
+            .catch(err => {
+                console.error("❌ Lỗi gửi tín hiệu cuộc gọi:", err);
+                this.handleCallError(err, 'sendCallSignal');
             });
     }
 
@@ -788,66 +856,44 @@ class Chat {
                 this.peerConnection = null;
             }
 
+            // Lấy cấu hình ICE servers từ Twilio
+            const twilioResponse = await fetch('/Chat/GetTwilioToken');
+            if (!twilioResponse.ok) {
+                throw new Error('Không thể lấy được cấu hình Twilio');
+            }
+            const twilioData = await twilioResponse.json();
+
             const configuration = {
-                iceServers: [
-                    {
-                        urls: [ "stun:ss-turn2.xirsys.com" ]
-                    }, 
-                    {
-                        username: "iQxaY79tknLKnsa9xrW3NnZEh_jZGfKc_al4qSBAhgG2TkbHbVXbfuY-2C7BOBkpAAAAAGf8_H5sZW5nb2N0dWFu",
-                        credential: "3947ff04-192a-11f0-a86f-0242ac140004",
-                        urls: [
-                            "turn:ss-turn2.xirsys.com:80?transport=udp",
-                            "turn:ss-turn2.xirsys.com:3478?transport=udp",
-                            "turn:ss-turn2.xirsys.com:80?transport=tcp",
-                            "turn:ss-turn2.xirsys.com:3478?transport=tcp",
-                            "turns:ss-turn2.xirsys.com:443?transport=tcp",
-                            "turns:ss-turn2.xirsys.com:5349?transport=tcp"
-                        ]
-                    },
-                    {
-                        urls: ['stun:stun.l.google.com:19302']
-                    }
-                ],
-                iceTransportPolicy: 'relay',
+                iceServers: twilioData.iceServers,
+                iceTransportPolicy: 'all', // Cho phép tất cả các loại kết nối
                 bundlePolicy: 'max-bundle',
                 rtcpMuxPolicy: 'require',
-                iceCandidatePoolSize: 0,
+                iceCandidatePoolSize: 1, // Tăng pool size để cải thiện tốc độ
                 sdpSemantics: 'unified-plan'
             };
 
             this.peerConnection = new RTCPeerConnection(configuration);
             console.log("Khởi tạo peer connection với cấu hình:", configuration);
 
-            // Xử lý các pending candidates sau khi khởi tạo peer connection
-            if (this.pendingCandidates.length > 0) {
-                console.log("Xử lý", this.pendingCandidates.length, "ICE candidates đang chờ");
-                for (const pendingCandidate of this.pendingCandidates) {
-                    if (pendingCandidate.senderId === senderId) {
-                        try {
-                            await this.peerConnection.addIceCandidate(
-                                new RTCIceCandidate(pendingCandidate.candidate)
-                            );
-                            console.log("Đã thêm pending ICE candidate");
-                        } catch (error) {
-                            console.error("Lỗi khi thêm pending ICE candidate:", error);
-                        }
-                    }
-                }
-                this.pendingCandidates = []; // Xóa các candidates đã xử lý
-            }
-
-            // Xử lý ICE candidate
+            // Thêm log để theo dõi candidate types
             this.peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
-                    console.log("Gửi ICE candidate:", event.candidate.type, event.candidate.protocol);
+                    console.log("ICE candidate:", {
+                        type: event.candidate.type,
+                        protocol: event.candidate.protocol,
+                        address: event.candidate.address,
+                        port: event.candidate.port
+                    });
                     this.sendCallSignal(senderId, "candidate", event.candidate);
                 }
             };
 
-            // Xử lý gathering state
+            // Log chi tiết về gathering state
             this.peerConnection.onicegatheringstatechange = () => {
                 console.log("ICE gathering state:", this.peerConnection.iceGatheringState);
+                if (this.peerConnection.iceGatheringState === 'complete') {
+                    console.log("Tất cả ICE candidates đã được thu thập");
+                }
             };
 
             // Xử lý kết nối state
@@ -863,42 +909,21 @@ class Chat {
 
                     case 'connected':
                     case 'completed':
+                        // Cập nhật UI cho cả hai bên
                         document.getElementById("connectionStatus").style.display = 'none';
                         document.getElementById("call-interface").style.display = 'block';
-                        this.reconnectAttempts = 0; // Reset số lần thử kết nối lại
-                        
-                        // Kiểm tra xem có video track không
-                        const hasVideoTrack = this.peerConnection.getTransceivers().some(
-                            transceiver => transceiver.receiver.track?.kind === 'video'
-                        );
-                        
-                        // Cập nhật UI dựa trên loại cuộc gọi
-                        const localVideo = document.getElementById("localVideo");
-                        const remoteVideo = document.getElementById("remoteVideo");
-                        const localAudioOnlyIcon = document.getElementById('localAudioOnlyIcon');
-                        const audioOnlyIcon = document.getElementById('audioOnlyIcon');
-                        
-                        if (!hasVideoTrack) {
-                            // Cuộc gọi chỉ có audio
-                            if (localVideo) {
-                                localVideo.style.backgroundColor = '#000000';
-                                if (localAudioOnlyIcon) {
-                                    localAudioOnlyIcon.innerHTML = '<i class="fas fa-microphone fa-3x"></i>';
-                                    localAudioOnlyIcon.style.display = 'flex';
-                                }
-                            }
-                            if (remoteVideo) {
-                                remoteVideo.style.backgroundColor = '#000000';
-                                if (audioOnlyIcon) {
-                                    audioOnlyIcon.innerHTML = '<i class="fas fa-microphone fa-3x"></i>';
-                                    audioOnlyIcon.style.display = 'flex';
-                                }
-                            }
-                            this.showNotification('Cuộc gọi audio đã được kết nối', 'info');
-                        }
-
+                        this.reconnectAttempts = 0;
                         this.updateCallState(CallState.IN_CALL);
                         this.startCallTimer();
+
+                        // Gửi tín hiệu xác nhận kết nối thành công
+                        if (this.currentCallerId) {
+                            this.sendCallSignal(this.currentCallerId === senderId ? 
+                                document.getElementById("selectedUser").value : senderId, 
+                                "connection_established", 
+                                { state: 'connected' }
+                            );
+                        }
                         break;
 
                     case 'disconnected':
@@ -911,10 +936,10 @@ class Chat {
                             const delay = (this.reconnectAttempts + 1) * 2000; // 2s, 4s, 6s
                             this.showNotification(`Đang thử kết nối lại (lần ${this.reconnectAttempts + 1})...`, 'warning');
                             
-                            setTimeout(() => {
+                            setTimeout(async () => {
                                 if (this.peerConnection?.iceConnectionState === 'disconnected') {
                                     this.reconnectAttempts++;
-                                    this.restartIce();
+                                    await this.restartIce();
                                 }
                             }, delay);
                         } else {
@@ -926,7 +951,6 @@ class Chat {
 
                     case 'failed':
                         console.log("Kết nối thất bại");
-                        // Chỉ kết thúc cuộc gọi nếu đã hết số lần thử kết nối lại
                         if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
                             this.showNotification('Kết nối cuộc gọi thất bại', 'error');
                             this.endCall();
@@ -1008,6 +1032,7 @@ class Chat {
             return this.peerConnection;
         } catch (error) {
             console.error("Lỗi khởi tạo peer connection:", error);
+            this.handleCallError(error, 'initializePeerConnection');
             throw error;
         }
     }
@@ -1027,7 +1052,7 @@ class Chat {
                 await this.peerConnection.setLocalDescription(offer);
                 
                 // Gửi offer mới
-                this.sendCallSignal(this.currentCallerId, "offer", {
+                this.sendCallSignal(this.currentCallerId, "reconnect-offer", {
                     type: 'offer',
                     sdp: offer.sdp,
                     senderName: document.getElementById("currentUser").getAttribute("data-username")
@@ -1040,6 +1065,7 @@ class Chat {
         } catch (error) {
             console.error("Lỗi khi restart ICE:", error);
             if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
+                this.showNotification('Không thể thiết lập lại kết nối', 'error');
                 this.endCall();
             }
         }
@@ -1445,28 +1471,22 @@ class Chat {
         }
     }
 
-    sendCallSignal(receiverId, signalType, signalData) {
-        console.log("Gửi tín hiệu cuộc gọi:", { receiverId, signalType, signalData });
-
-        // Lấy thông tin người gửi
-        const senderId = document.getElementById("currentUser").value;
-        const senderName = document.getElementById("currentUser").getAttribute("data-username");
-
-        // Gửi tín hiệu đến server
-        this.connection.invoke("SendCallSignal", senderId, receiverId, signalType, signalData)
-            .then(() => {
-                console.log("✅ Tín hiệu cuộc gọi đã được gửi thành công");
-            })
-            .catch(err => {
-                console.error("❌ Lỗi gửi tín hiệu cuộc gọi:", err);
-                this.handleCallError(err, 'sendCallSignal');
-            });
-    }
-
     endCall(initiatorId = null) {
         console.log("Kết thúc cuộc gọi", initiatorId ? `từ ${initiatorId}` : "");
 
-        // Dừng và xóa các track media
+        // Cập nhật trạng thái
+        this.updateCallState(CallState.ENDING);
+
+        // Nếu người hiện tại là người chủ động kết thúc cuộc gọi
+        if (!initiatorId && this.currentCallerId) {
+            console.log("Gửi tín hiệu kết thúc đến:", this.currentCallerId);
+            this.sendCallSignal(this.currentCallerId, "end", {
+                initiator: document.getElementById("currentUser").value,
+                reason: "user_ended"
+            });
+        }
+
+        // Dừng media streams
         const localVideo = document.getElementById("localVideo");
         const remoteVideo = document.getElementById("remoteVideo");
 
@@ -1480,47 +1500,35 @@ class Chat {
             remoteVideo.srcObject = null;
         }
 
-        // Đóng peer connection nếu có
+        // Đóng peer connection
         if (this.peerConnection) {
             this.peerConnection.close();
             this.peerConnection = null;
         }
 
-        // Reset trạng thái cuộc gọi
-        const previousState = this.currentCallState;
+        // Reset các trạng thái
         this.currentCallState = CallState.IDLE;
+        this.currentCallerId = null;
         this.callAccepted = false;
-
-        // Dừng timer
         this.stopCallTimer();
-        
-        // Đóng modal
+
+        // Đóng modal và cập nhật UI
         this.closeModal();
-        
+        document.getElementById("connectionStatus").style.display = 'none';
+        document.getElementById("call-interface").style.display = 'none';
+        document.getElementById("incoming-call").style.display = 'none';
+
         // Xóa timeout nếu có
         if (this.incomingCallTimeout) {
             clearTimeout(this.incomingCallTimeout);
             this.incomingCallTimeout = null;
         }
 
-        // Nếu người hiện tại là người chủ động kết thúc cuộc gọi
-        // và đang trong trạng thái gọi hoặc đang trong cuộc gọi
-        if (!initiatorId && 
-            (previousState === CallState.CALLING || previousState === CallState.IN_CALL) && 
-            this.currentCallerId) {
-            console.log("Gửi tín hiệu kết thúc đến:", this.currentCallerId);
-            this.sendCallSignal(this.currentCallerId, "end", {
-                initiator: document.getElementById("currentUser").value,
-                reason: "user_ended"
-            });
-        }
-
-        // Reset caller ID sau khi đã gửi tín hiệu kết thúc
-        this.currentCallerId = null;
-
-        // Hiển thị thông báo
+        // Hiển thị thông báo phù hợp
         if (initiatorId) {
             this.showNotification('Cuộc gọi đã kết thúc bởi người dùng khác', 'info');
+        } else {
+            this.showNotification('Cuộc gọi đã kết thúc', 'info');
         }
     }
 
