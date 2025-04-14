@@ -1,61 +1,61 @@
-﻿<div class="modal fade" id="callModal" tabindex="-1" role="dialog" aria-labelledby="callModalLabel" aria-hidden="true" data-bs-backdrop="static">
+﻿<div class="modal fade" id="callModal" tabindex="-1" role="dialog" aria-labelledby="callModalLabel" data-backdrop="static">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="callModalLabel">
                     <span class="call-status">Cuộc gọi</span>
-                    <small id="callTimer" class="text-muted ms-2" style="display:none;">00:00</small>
+                    <small id="callTimer" class="text-muted ml-2" style="display:none;">00:00</small>
                 </h5>
-                <button class="btn btn-close d-none" type="button" data-bs-dismiss="modal" aria-label="Close" id="closeCallButton"></button>
+                <button class="btn btn-close d-none" type="button" data-dismiss="modal" aria-label="Đóng cuộc gọi" id="closeCallButton"></button>
             </div>
             <div class="modal-body p-3">
                 <!-- Thông báo lỗi -->
                 <div id="callError" class="alert alert-danger" style="display:none;" role="alert">
-                    <i class="fas fa-exclamation-circle"></i>
+                    <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
                     <span id="errorMessage"></span>
                 </div>
 
                 <!-- Trạng thái kết nối -->
-                <div id="connectionStatus" class="alert alert-info" style="display:none;" role="alert">
+                <div id="connectionStatus" class="alert alert-info" style="display:none;" role="status">
                     <div class="d-flex align-items-center">
-                        <div class="spinner-border spinner-border-sm me-2" role="status">
-                            <span class="visually-hidden">Đang kết nối...</span>
+                        <div class="spinner-border spinner-border-sm mr-2" role="status">
+                            <span class="sr-only">Đang kết nối...</span>
                         </div>
                         <span id="statusMessage">Đang kết nối...</span>
                     </div>
                 </div>
 
                 <!-- Giao diện cuộc gọi -->
-                <div id="call-interface" class="text-center" style="display:none;">
+                <div id="call-interface" class="text-center" style="display:none;" role="region" aria-label="Giao diện cuộc gọi">
                     <div class="video-container d-flex justify-content-center gap-3 mb-3">
                         <div class="local-video-wrapper position-relative">
-                            <video id="localVideo" autoplay muted playsinline class="rounded border border-primary"></video>
-                            <span class="badge bg-primary position-absolute bottom-0 start-0 m-2">Bạn</span>
-                            <div class="audio-indicator position-absolute top-0 end-0 m-2"></div>
+                            <video id="localVideo" autoplay muted playsinline class="rounded border border-primary" aria-label="Video của bạn"></video>
+                            <span class="badge badge-primary position-absolute bottom-0 left-0 m-2">Bạn</span>
+                            <div class="audio-indicator position-absolute top-0 right-0 m-2" role="status" aria-label="Trạng thái âm thanh"></div>
                         </div>
                         <div class="remote-video-wrapper position-relative">
-                            <video id="remoteVideo" autoplay playsinline class="rounded border border-danger"></video>
-                            <span class="badge bg-danger position-absolute bottom-0 start-0 m-2" id="remoteUserName">Đối phương</span>
-                            <div class="audio-indicator position-absolute top-0 end-0 m-2"></div>
+                            <video id="remoteVideo" autoplay playsinline class="rounded border border-danger" aria-label="Video của người gọi"></video>
+                            <span class="badge badge-danger position-absolute bottom-0 left-0 m-2" id="remoteUserName">Đối phương</span>
+                            <div class="audio-indicator position-absolute top-0 right-0 m-2" role="status" aria-label="Trạng thái âm thanh"></div>
                         </div>
                     </div>
-                    <div class="call-controls">
-                        <button class="btn btn-outline-secondary rounded-circle me-2" id="toggleMicButton">
-                            <i class="fas fa-microphone"></i>
+                    <div class="call-controls" role="toolbar" aria-label="Điều khiển cuộc gọi">
+                        <button class="btn btn-outline-secondary rounded-circle mr-2" id="toggleMicButton" aria-label="Bật/tắt microphone">
+                            <i class="fas fa-microphone" aria-hidden="true"></i>
                         </button>
-                        <button class="btn btn-danger" id="endCallButton">
-                            <i class="fas fa-phone-slash"></i> Kết thúc
+                        <button class="btn btn-danger" id="endCallButton" aria-label="Kết thúc cuộc gọi">
+                            <i class="fas fa-phone-slash" aria-hidden="true"></i> Kết thúc
                         </button>
-                        <button class="btn btn-outline-secondary rounded-circle ms-2" id="toggleSpeakerButton">
-                            <i class="fas fa-volume-up"></i>
+                        <button class="btn btn-outline-secondary rounded-circle ml-2" id="toggleSpeakerButton" aria-label="Bật/tắt loa">
+                            <i class="fas fa-volume-up" aria-hidden="true"></i>
                         </button>
                     </div>
                 </div>
 
                 <!-- Giao diện khi có cuộc gọi đến -->
-                <div id="incoming-call" class="text-center py-4" style="display:none;">
+                <div id="incoming-call" class="text-center py-4" style="display:none;" role="region" aria-label="Cuộc gọi đến">
                     <div class="incoming-call-animation mb-4">
-                        <i class="fas fa-phone-volume fa-4x text-primary"></i>
+                        <i class="fas fa-phone-volume fa-4x text-primary" aria-hidden="true"></i>
                     </div>
                     <h4 class="mb-3">📞 Cuộc gọi đến</h4>
                     <p id="callerName" class="lead mb-4">Người gọi...</p>
@@ -63,11 +63,11 @@
                         Tự động từ chối sau <span id="timeoutCounter">30</span> giây
                     </div>
                     <div class="d-flex justify-content-center gap-3">
-                        <button class="btn btn-success btn-lg px-4" id="acceptCallButton">
-                            <i class="fas fa-phone"></i> Chấp nhận
+                        <button class="btn btn-success btn-lg px-4" id="acceptCallButton" aria-label="Chấp nhận cuộc gọi">
+                            <i class="fas fa-phone" aria-hidden="true"></i> Chấp nhận
                         </button>
-                        <button class="btn btn-danger btn-lg px-4" id="rejectCallButton">
-                            <i class="fas fa-phone-slash"></i> Từ chối
+                        <button class="btn btn-danger btn-lg px-4" id="rejectCallButton" aria-label="Từ chối cuộc gọi">
+                            <i class="fas fa-phone-slash" aria-hidden="true"></i> Từ chối
                         </button>
                     </div>
                 </div>
