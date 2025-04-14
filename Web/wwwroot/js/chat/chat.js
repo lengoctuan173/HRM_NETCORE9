@@ -518,7 +518,7 @@ class Chat {
                         clearInterval(countdownInterval);
                         this.callAccepted = true;
 
-                        // Khởi tạo peer connection
+                        // Khởi tạo peer connection trước khi xử lý offer
                         await this.initializePeerConnection(senderId);
 
                         // Set remote description từ offer
@@ -533,7 +533,10 @@ class Chat {
                             
                             // Tạo answer
                             console.log("Creating answer");
-                            const answer = await this.peerConnection.createAnswer();
+                            const answer = await this.peerConnection.createAnswer({
+                                offerToReceiveAudio: true,
+                                offerToReceiveVideo: true
+                            });
                             
                             // Set local description
                             console.log("Setting local description");
@@ -551,6 +554,10 @@ class Chat {
                             document.getElementById("call-interface").style.display = 'block';
                             document.getElementById("connectionStatus").style.display = 'block';
                             document.getElementById("statusMessage").textContent = 'Đang thiết lập kết nối...';
+
+                            // Cập nhật trạng thái cuộc gọi
+                            this.updateCallState(CallState.IN_CALL);
+                            this.currentCallerId = senderId;
                         } else {
                             throw new Error("Invalid offer data received");
                         }
