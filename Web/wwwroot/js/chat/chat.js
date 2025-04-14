@@ -743,6 +743,9 @@ class Chat {
                     audioOnlyIcon.style.transform = 'translate(-50%, -50%)';
                     audioOnlyIcon.style.color = '#ffffff';
                     audioOnlyIcon.style.zIndex = '1';
+                    
+                    // Thông báo cuộc gọi audio
+                    this.showNotification('Cuộc gọi audio đã được kết nối', 'info');
                 } else {
                     audioOnlyIcon.style.display = 'none';
                 }
@@ -751,8 +754,12 @@ class Chat {
             try {
                 await remoteVideo.play();
                 console.log(`Đang phát ${hasVideoTrack ? 'video' : 'audio'} từ người dùng khác`);
+                
+                // Ẩn thông báo "đang kết nối" khi stream đã phát được
+                document.getElementById("connectionStatus").style.display = 'none';
             } catch (error) {
                 console.error("Lỗi khi phát remote stream:", error);
+                this.handleCallError(error, 'handleRemoteStream');
             }
         }
     }
@@ -823,12 +830,46 @@ class Chat {
                     case 'completed':
                         document.getElementById("connectionStatus").style.display = 'none';
                         document.getElementById("call-interface").style.display = 'block';
+                        
+                        // Kiểm tra xem có video track không
+                        const hasVideoTrack = this.peerConnection.getTransceivers().some(
+                            transceiver => transceiver.receiver.track?.kind === 'video'
+                        );
+                        
+                        // Cập nhật UI dựa trên loại cuộc gọi
+                        const localVideo = document.getElementById("localVideo");
+                        const remoteVideo = document.getElementById("remoteVideo");
+                        const localAudioOnlyIcon = document.getElementById('localAudioOnlyIcon');
+                        const audioOnlyIcon = document.getElementById('audioOnlyIcon');
+                        
+                        if (!hasVideoTrack) {
+                            // Cuộc gọi chỉ có audio
+                            if (localVideo) {
+                                localVideo.style.backgroundColor = '#000000';
+                                if (localAudioOnlyIcon) {
+                                    localAudioOnlyIcon.innerHTML = '<i class="fas fa-microphone fa-3x"></i>';
+                                    localAudioOnlyIcon.style.display = 'flex';
+                                }
+                            }
+                            if (remoteVideo) {
+                                remoteVideo.style.backgroundColor = '#000000';
+                                if (audioOnlyIcon) {
+                                    audioOnlyIcon.innerHTML = '<i class="fas fa-microphone fa-3x"></i>';
+                                    audioOnlyIcon.style.display = 'flex';
+                                }
+                            }
+                            this.showNotification('Cuộc gọi audio đã được kết nối', 'info');
+                        }
+
                         this.updateCallState(CallState.IN_CALL);
                         this.startCallTimer();
                         break;
 
                     case 'disconnected':
-                        console.log("Kết nối bị gián đoạn, thử kết nối lại...");
+                        console.log("Kết nối bị gián đoạn");
+                        document.getElementById("connectionStatus").style.display = 'block';
+                        document.getElementById("statusMessage").textContent = 'Kết nối không ổn định...';
+                        
                         // Thử kết nối lại sau 1 giây
                         setTimeout(() => {
                             if (this.peerConnection?.iceConnectionState === 'disconnected') {
@@ -839,6 +880,7 @@ class Chat {
 
                     case 'failed':
                         console.log("Kết nối thất bại");
+                        this.showNotification('Kết nối cuộc gọi thất bại', 'error');
                         this.endCall();
                         break;
                 }
