@@ -769,19 +769,34 @@ class Chat {
                     {
                         urls: [
                             'stun:stun.l.google.com:19302',
-                            'stun:stun1.l.google.com:19302'
+                            'stun:stun1.l.google.com:19302',
+                            'stun:stun2.l.google.com:19302',
+                            'stun:stun3.l.google.com:19302',
+                            'stun:stun4.l.google.com:19302'
                         ]
                     }
-                ]
+                ],
+                iceTransportPolicy: 'all',
+                bundlePolicy: 'max-bundle',
+                rtcpMuxPolicy: 'require',
+                iceCandidatePoolSize: 0,
+                sdpSemantics: 'unified-plan'
             };
 
             this.peerConnection = new RTCPeerConnection(configuration);
+            console.log("Khởi tạo peer connection với cấu hình:", configuration);
 
             // Xử lý ICE candidate
             this.peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
+                    console.log("Gửi ICE candidate:", event.candidate.type, event.candidate.protocol);
                     this.sendCallSignal(senderId, "candidate", event.candidate);
                 }
+            };
+
+            // Xử lý gathering state
+            this.peerConnection.onicegatheringstatechange = () => {
+                console.log("ICE gathering state:", this.peerConnection.iceGatheringState);
             };
 
             // Xử lý kết nối state
@@ -796,6 +811,7 @@ class Chat {
                         break;
 
                     case 'connected':
+                    case 'completed':
                         document.getElementById("connectionStatus").style.display = 'none';
                         document.getElementById("call-interface").style.display = 'block';
                         this.updateCallState(CallState.IN_CALL);
@@ -803,9 +819,27 @@ class Chat {
                         break;
 
                     case 'disconnected':
+                        console.log("Kết nối bị gián đoạn, thử kết nối lại...");
+                        // Thử kết nối lại sau 1 giây
+                        setTimeout(() => {
+                            if (this.peerConnection?.iceConnectionState === 'disconnected') {
+                                this.restartIce();
+                            }
+                        }, 1000);
+                        break;
+
                     case 'failed':
+                        console.log("Kết nối thất bại");
                         this.endCall();
                         break;
+                }
+            };
+
+            // Xử lý connection state
+            this.peerConnection.onconnectionstatechange = () => {
+                console.log("Connection state:", this.peerConnection.connectionState);
+                if (this.peerConnection.connectionState === 'failed') {
+                    this.endCall();
                 }
             };
 
@@ -820,6 +854,7 @@ class Chat {
                 const stream = await this.setupMediaStream();
                 
                 stream.getTracks().forEach(track => {
+                    console.log("Thêm track:", track.kind);
                     this.peerConnection.addTrack(track, stream);
                 });
 
@@ -857,7 +892,6 @@ class Chat {
                 }
             } catch (error) {
                 console.error("Lỗi khi thiết lập local stream:", error);
-                // Nếu lỗi liên quan đến video, vẫn cho phép cuộc gọi audio
                 if (!error.message.includes('audio')) {
                     throw error;
                 }
@@ -874,7 +908,11 @@ class Chat {
         try {
             if (this.peerConnection && this.currentCallerId) {
                 console.log("Đang thử khởi động lại kết nối ICE...");
-                const offer = await this.peerConnection.createOffer({ iceRestart: true });
+                const offer = await this.peerConnection.createOffer({ 
+                    iceRestart: true,
+                    offerToReceiveAudio: true,
+                    offerToReceiveVideo: true
+                });
                 await this.peerConnection.setLocalDescription(offer);
                 
                 this.sendCallSignal(this.currentCallerId, "offer", {
