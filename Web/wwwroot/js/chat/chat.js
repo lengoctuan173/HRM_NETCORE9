@@ -926,8 +926,14 @@ class Chat {
 
         const configuration = {
             iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' }
-            ]
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' }
+            ],
+            iceTransportPolicy: 'all',
+            bundlePolicy: 'max-bundle',
+            rtcpMuxPolicy: 'require',
+            iceCandidatePoolSize: 1
         };
 
         this.peerConnection = new RTCPeerConnection(configuration);
@@ -941,11 +947,11 @@ class Chat {
         }.bind(this);
 
         // Xử lý kết nối ICE state
-        this.peerConnection.oniceconnectionstatechange = function () {
+        this.peerConnection.oniceconnectionstatechange = async function () {
             console.log("ICE connection state:", this.peerConnection.iceConnectionState);
             switch (this.peerConnection.iceConnectionState) {
                 case 'connected':
-                    // Khi kết nối thành công, hiển thị giao diện cuộc gọi cho cả hai bên
+                    this.reconnectAttempts = 0;
                     this.showModal();
                     document.getElementById("incoming-call").style.display = 'none';
                     document.getElementById("call-interface").style.display = 'block';
@@ -955,11 +961,43 @@ class Chat {
                     break;
                 case 'disconnected':
                     console.log('Kết nối ICE bị ngắt');
-                    this.endCall();
+                    if (this.reconnectAttempts < this.MAX_RECONNECT_ATTEMPTS) {
+                        console.log(`Đang thử kết nối lại (lần ${this.reconnectAttempts + 1}/${this.MAX_RECONNECT_ATTEMPTS})`);
+                        document.getElementById("statusMessage").textContent = `Đang thử kết nối lại (${this.reconnectAttempts + 1}/${this.MAX_RECONNECT_ATTEMPTS})...`;
+                        document.getElementById("connectionStatus").style.display = 'block';
+                        
+                        // Thử kết nối lại sau 1 giây
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        
+                        try {
+                            // Tạo offer mới
+                            const offer = await this.peerConnection.createOffer();
+                            await this.peerConnection.setLocalDescription(offer);
+                            
+                            // Gửi offer mới đến peer
+                            this.sendCallSignal(this.currentCallerId, "offer", {
+                                type: 'offer',
+                                sdp: offer.sdp,
+                                senderName: document.getElementById("currentUser").getAttribute("data-username")
+                            });
+                            
+                            this.reconnectAttempts++;
+                        } catch (error) {
+                            console.error("Lỗi khi thử kết nối lại:", error);
+                            this.endCall();
+                        }
+                    } else {
+                        console.log('Đã vượt quá số lần thử kết nối lại');
+                        this.endCall();
+                    }
                     break;
                 case 'failed':
                     console.log('Kết nối ICE thất bại');
                     this.handleCallError(new Error('Kết nối cuộc gọi thất bại'), 'iceConnection');
+                    this.endCall();
+                    break;
+                case 'closed':
+                    console.log('Kết nối ICE đã đóng');
                     this.endCall();
                     break;
             }
