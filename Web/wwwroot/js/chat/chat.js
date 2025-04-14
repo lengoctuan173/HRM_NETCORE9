@@ -564,7 +564,7 @@ class Chat {
 
             if (!this.peerConnection) {
                 console.log("Khởi tạo peer connection mới khi nhận answer");
-                this.initializePeerConnection(senderId);
+                await this.initializePeerConnection(senderId);
             }
 
             const answerDesc = new RTCSessionDescription({
@@ -574,12 +574,20 @@ class Chat {
             
             console.log("Setting remote description (answer):", answerDesc);
             await this.peerConnection.setRemoteDescription(answerDesc);
+            
             // Hiển thị modal cho người gọi
             this.showModal();
             document.getElementById("call-interface").style.display = 'block';
             document.getElementById("connectionStatus").style.display = 'block';
             document.getElementById("statusMessage").textContent = 'Đang thiết lập kết nối...';
             document.getElementById("incoming-call").style.display = 'none';
+            
+            // Đảm bảo remote video được hiển thị
+            const remoteVideo = document.getElementById("remoteVideo");
+            if (remoteVideo) {
+                remoteVideo.style.display = "block";
+                remoteVideo.play().catch(err => console.error("Lỗi khi play remote video:", err));
+            }
             
             console.log("Đã hoàn tất xử lý answer");
         } catch (error) {
