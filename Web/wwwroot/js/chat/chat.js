@@ -582,23 +582,6 @@ class Chat {
             document.getElementById("statusMessage").textContent = 'Đang thiết lập kết nối...';
             document.getElementById("incoming-call").style.display = 'none';
             
-            // Đảm bảo remote video được hiển thị
-            const remoteVideo = document.getElementById("remoteVideo");
-            if (remoteVideo) {
-                remoteVideo.style.display = "block";
-                // Kiểm tra và cập nhật remote video stream
-                if (this.peerConnection.getReceivers().length > 0) {
-                    const stream = new MediaStream();
-                    this.peerConnection.getReceivers().forEach(receiver => {
-                        if (receiver.track) {
-                            stream.addTrack(receiver.track);
-                        }
-                    });
-                    remoteVideo.srcObject = stream;
-                    remoteVideo.play().catch(err => console.error("Lỗi khi play remote video:", err));
-                }
-            }
-            
             console.log("Đã hoàn tất xử lý answer");
         } catch (error) {
             console.error("Lỗi khi xử lý answer:", error);
@@ -968,17 +951,35 @@ class Chat {
         }.bind(this);
 
         // Xử lý remote stream
-        this.peerConnection.ontrack = function (event) {
+        this.peerConnection.ontrack = async function (event) {
             console.log("Nhận track từ peer:", event);
             const remoteVideo = document.getElementById("remoteVideo");
-            if (remoteVideo) {
-                if (event.streams && event.streams[0]) {
+            if (remoteVideo && event.streams && event.streams[0]) {
+                try {
                     console.log("Đã nhận remote stream");
-                    remoteVideo.srcObject = event.streams[0];
-                    remoteVideo.play().catch(err => console.error("Lỗi khi play remote video:", err));
+                    // Đảm bảo video element được reset trước khi set stream mới
+                    remoteVideo.srcObject = null;
+                    remoteVideo.load();
                     
-                    // Thiết lập audio indicator cho remote video
+                    // Set stream mới
+                    remoteVideo.srcObject = event.streams[0];
+                    remoteVideo.style.display = "block";
+                    
+                    // Đợi video element sẵn sàng
+                    await new Promise((resolve) => {
+                        remoteVideo.onloadedmetadata = () => {
+                            resolve();
+                        };
+                    });
+                    
+                    // Play video
+                    await remoteVideo.play();
+                    console.log("Remote video đã bắt đầu phát");
+                    
+                    // Thiết lập audio indicator
                     this.setupAudioLevelIndicator(event.streams[0], "remoteVideo");
+                } catch (err) {
+                    console.error("Lỗi khi xử lý remote stream:", err);
                 }
             }
         }.bind(this);
@@ -1000,7 +1001,7 @@ class Chat {
                 const localVideo = document.getElementById("localVideo");
                 if (localVideo) {
                     localVideo.srcObject = stream;
-                    localVideo.play().catch(err => console.error("Lỗi khi play local video:", err));
+                    await localVideo.play().catch(err => console.error("Lỗi khi play local video:", err));
                     
                     // Thiết lập audio indicator cho local video
                     this.setupAudioLevelIndicator(stream, "localVideo");
