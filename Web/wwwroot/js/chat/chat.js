@@ -940,56 +940,14 @@ class Chat {
         };
 
         this.peerConnection = new RTCPeerConnection(configuration);
+        let remoteStream = null;
 
         // Xử lý remote stream
         this.peerConnection.ontrack = async (event) => {
             console.log("Nhận track từ peer:", event);
-            const remoteVideo = document.getElementById("remoteVideo");
-            if (remoteVideo && event.streams && event.streams[0]) {
-                try {
-                    // Dừng stream cũ nếu có
-                    if (remoteVideo.srcObject) {
-                        const oldStream = remoteVideo.srcObject;
-                        oldStream.getTracks().forEach(track => track.stop());
-                    }
-
-                    // Reset video element
-                    remoteVideo.srcObject = null;
-                    await new Promise(resolve => setTimeout(resolve, 100));
-
-                    // Gán stream mới
-                    console.log("Đang thiết lập remote stream");
-                    remoteVideo.srcObject = event.streams[0];
-                    
-                    // Đợi video load xong metadata
-                    await new Promise((resolve) => {
-                        remoteVideo.onloadedmetadata = () => {
-                            console.log("Remote video metadata loaded");
-                            resolve();
-                        };
-                    });
-
-                    // Play video
-                    console.log("Bắt đầu play remote video");
-                    await remoteVideo.play();
-                    console.log("Remote video đang chạy");
-
-                    // Thiết lập audio indicator
-                    this.setupAudioLevelIndicator(event.streams[0], "remoteVideo");
-                } catch (error) {
-                    console.error("Lỗi khi xử lý remote stream:", error);
-                    if (error.name === 'AbortError') {
-                        console.log("Thử lại play remote video sau 500ms");
-                        setTimeout(async () => {
-                            try {
-                                await remoteVideo.play();
-                                console.log("Play remote video thành công sau khi thử lại");
-                            } catch (retryError) {
-                                console.error("Vẫn không thể play remote video:", retryError);
-                            }
-                        }, 500);
-                    }
-                }
+            if (event.streams && event.streams[0]) {
+                remoteStream = event.streams[0];
+                console.log("Đã lưu remote stream, chờ kết nối ICE thành công");
             }
         };
 
@@ -1002,7 +960,7 @@ class Chat {
         };
 
         // Xử lý kết nối ICE state
-        this.peerConnection.oniceconnectionstatechange = () => {
+        this.peerConnection.oniceconnectionstatechange = async () => {
             console.log("ICE connection state:", this.peerConnection.iceConnectionState);
             switch (this.peerConnection.iceConnectionState) {
                 case 'connected':
@@ -1011,6 +969,59 @@ class Chat {
                     document.getElementById("call-interface").style.display = 'block';
                     document.getElementById("connectionStatus").style.display = 'none';
                     this.updateCallState(CallState.IN_CALL);
+                    
+                    // Xử lý remote stream sau khi ICE connected
+                    if (remoteStream) {
+                        try {
+                            const remoteVideo = document.getElementById("remoteVideo");
+                            if (remoteVideo) {
+                                // Dừng stream cũ nếu có
+                                if (remoteVideo.srcObject) {
+                                    const oldStream = remoteVideo.srcObject;
+                                    oldStream.getTracks().forEach(track => track.stop());
+                                }
+
+                                // Reset video element
+                                remoteVideo.srcObject = null;
+                                await new Promise(resolve => setTimeout(resolve, 100));
+
+                                // Gán stream mới
+                                console.log("Thiết lập remote stream sau khi ICE connected");
+                                remoteVideo.srcObject = remoteStream;
+                                
+                                // Đợi video load xong metadata
+                                await new Promise((resolve) => {
+                                    remoteVideo.onloadedmetadata = () => {
+                                        console.log("Remote video metadata loaded");
+                                        resolve();
+                                    };
+                                });
+
+                                // Play video
+                                console.log("Bắt đầu play remote video");
+                                await remoteVideo.play();
+                                console.log("Remote video đang chạy");
+
+                                // Thiết lập audio indicator
+                                this.setupAudioLevelIndicator(remoteStream, "remoteVideo");
+                            }
+                        } catch (error) {
+                            console.error("Lỗi khi xử lý remote stream:", error);
+                            if (error.name === 'AbortError') {
+                                console.log("Thử lại play remote video sau 500ms");
+                                setTimeout(async () => {
+                                    try {
+                                        const remoteVideo = document.getElementById("remoteVideo");
+                                        await remoteVideo.play();
+                                        console.log("Play remote video thành công sau khi thử lại");
+                                    } catch (retryError) {
+                                        console.error("Vẫn không thể play remote video:", retryError);
+                                    }
+                                }, 500);
+                            }
+                        }
+                    }
+                    
                     this.startCallTimer();
                     break;
                 case 'disconnected':
