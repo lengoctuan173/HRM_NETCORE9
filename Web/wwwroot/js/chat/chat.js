@@ -25,6 +25,7 @@ class Chat {
         this.reconnectAttempts = 0;
         this.MAX_RECONNECT_ATTEMPTS = 3;
         this.CALL_TIMEOUT = 30000;
+        this.pendingCandidates = []; // Thêm mảng để lưu trữ các candidates đang chờ
 
         this.initEvents();
         this.startConnection();
@@ -285,7 +286,13 @@ class Chat {
 
                 case "candidate":
                     console.log("Nhận ICE candidate từ:", senderId);
-                    if (this.peerConnection && (this.currentCallState === CallState.CALLING || this.currentCallState === CallState.IN_CALL)) {
+                    if (!this.peerConnection) {
+                        console.log("Lưu trữ ICE candidate để xử lý sau");
+                        this.pendingCandidates.push({
+                            senderId: senderId,
+                            candidate: signalData
+                        });
+                    } else if (this.currentCallState === CallState.CALLING || this.currentCallState === CallState.IN_CALL) {
                         try {
                             await this.peerConnection.addIceCandidate(new RTCIceCandidate(signalData));
                             console.log("Đã thêm ICE candidate");
@@ -293,14 +300,17 @@ class Chat {
                             console.error("Lỗi khi thêm ICE candidate:", error);
                         }
                     } else {
-                        console.log("Bỏ qua candidate vì không trong cuộc gọi hoặc chưa có peerConnection");
+                        console.log("Bỏ qua candidate vì không trong cuộc gọi");
                     }
                     break;
 
                 case "end":
                     console.log("Nhận tín hiệu kết thúc từ:", senderId);
-                    this.endCall(senderId);
-                    this.currentCallerId = null;
+                    if (this.currentCallState === CallState.CALLING || 
+                        this.currentCallState === CallState.IN_CALL) {
+                        // Kết thúc cuộc gọi với initiatorId là người gửi tín hiệu kết thúc
+                        this.endCall(senderId);
+                    }
                     break;
 
                 case "busy":
@@ -808,6 +818,24 @@ class Chat {
 
             this.peerConnection = new RTCPeerConnection(configuration);
             console.log("Khởi tạo peer connection với cấu hình:", configuration);
+
+            // Xử lý các pending candidates sau khi khởi tạo peer connection
+            if (this.pendingCandidates.length > 0) {
+                console.log("Xử lý", this.pendingCandidates.length, "ICE candidates đang chờ");
+                for (const pendingCandidate of this.pendingCandidates) {
+                    if (pendingCandidate.senderId === senderId) {
+                        try {
+                            await this.peerConnection.addIceCandidate(
+                                new RTCIceCandidate(pendingCandidate.candidate)
+                            );
+                            console.log("Đã thêm pending ICE candidate");
+                        } catch (error) {
+                            console.error("Lỗi khi thêm pending ICE candidate:", error);
+                        }
+                    }
+                }
+                this.pendingCandidates = []; // Xóa các candidates đã xử lý
+            }
 
             // Xử lý ICE candidate
             this.peerConnection.onicecandidate = (event) => {
@@ -1435,8 +1463,8 @@ class Chat {
             });
     }
 
-    endCall() {
-        console.log("Kết thúc cuộc gọi");
+    endCall(initiatorId = null) {
+        console.log("Kết thúc cuộc gọi", initiatorId ? `từ ${initiatorId}` : "");
 
         // Dừng và xóa các track media
         const localVideo = document.getElementById("localVideo");
@@ -1459,8 +1487,8 @@ class Chat {
         }
 
         // Reset trạng thái cuộc gọi
+        const previousState = this.currentCallState;
         this.currentCallState = CallState.IDLE;
-        this.currentCallerId = null;
         this.callAccepted = false;
 
         // Dừng timer
@@ -1475,9 +1503,24 @@ class Chat {
             this.incomingCallTimeout = null;
         }
 
-        // Gửi tín hiệu kết thúc cuộc gọi
-        if (this.currentCallerId) {
-            this.sendCallSignal(this.currentCallerId, "end", null);
+        // Nếu người hiện tại là người chủ động kết thúc cuộc gọi
+        // và đang trong trạng thái gọi hoặc đang trong cuộc gọi
+        if (!initiatorId && 
+            (previousState === CallState.CALLING || previousState === CallState.IN_CALL) && 
+            this.currentCallerId) {
+            console.log("Gửi tín hiệu kết thúc đến:", this.currentCallerId);
+            this.sendCallSignal(this.currentCallerId, "end", {
+                initiator: document.getElementById("currentUser").value,
+                reason: "user_ended"
+            });
+        }
+
+        // Reset caller ID sau khi đã gửi tín hiệu kết thúc
+        this.currentCallerId = null;
+
+        // Hiển thị thông báo
+        if (initiatorId) {
+            this.showNotification('Cuộc gọi đã kết thúc bởi người dùng khác', 'info');
         }
     }
 
