@@ -1080,7 +1080,11 @@ class Chat {
         const selectedUserInfo = document.querySelector(".selected-user-info");
         if (selectedUserInfo) {
             selectedUserInfo.querySelector(".selected-user-name").textContent = userName;
-            selectedUserInfo.querySelector(".user-status").textContent = "Online";
+            
+            // Kiểm tra trạng thái online thực tế của user
+            const contactElement = document.querySelector(`.contact[data-userid="${userId}"]`);
+            const isOnline = contactElement && contactElement.classList.contains('online');
+            selectedUserInfo.querySelector(".user-status").textContent = isOnline ? "Online" : "Offline";
         }
 
         // Update avatar
