@@ -193,13 +193,16 @@ class Chat {
     }
 
     handleUpdateUserList(allUsers, onlineUsers) {
+        console.log("Nhận danh sách người dùng:", { allUsers, onlineUsers });
         let contactList = document.querySelector(".contacts-scrollable");
         contactList.innerHTML = ""; // Xóa danh sách cũ
 
         let currentUser = document.getElementById("currentUser").value;
+        console.log("User hiện tại:", currentUser);
 
         allUsers.forEach(function (user) {
-            if (user.userId !== currentUser) {
+            // Kiểm tra chặt chẽ hơn để đảm bảo không hiển thị user hiện tại
+            if (user.userId && user.userId.toString() !== currentUser.toString()) {
                 let isOnline = onlineUsers.includes(user.userId);
                 let avatarPath = user.imagePath && user.imagePath.trim() !== ""
                     ? (user.imagePath.startsWith("http") ? user.imagePath : `/content/images/avatar/${user.imagePath}`)
@@ -571,26 +574,8 @@ class Chat {
             
             console.log("Setting remote description (answer):", answerDesc);
             await this.peerConnection.setRemoteDescription(answerDesc);
-            
             // Hiển thị modal cho người gọi
-            const callModal = document.getElementById("callModal");
-            if (callModal) {
-                callModal.classList.add("show");
-                callModal.style.display = "block";
-                callModal.setAttribute("aria-modal", "true");
-                callModal.setAttribute("role", "dialog");
-                
-                // Thêm backdrop
-                const backdrop = document.createElement("div");
-                backdrop.className = "modal-backdrop fade show";
-                document.body.appendChild(backdrop);
-                
-                // Thêm class modal-open cho body
-                document.body.classList.add("modal-open");
-                document.body.style.overflow = "hidden";
-                document.body.style.paddingRight = "17px";
-            }
-
+            this.showModal();
             document.getElementById("call-interface").style.display = 'block';
             document.getElementById("connectionStatus").style.display = 'block';
             document.getElementById("statusMessage").textContent = 'Đang thiết lập kết nối...';
@@ -827,6 +812,9 @@ class Chat {
     }
 
     startCallTimer() {
+        // Đảm bảo dừng timer cũ nếu có
+        this.stopCallTimer();
+        
         const timerElement = document.getElementById('callTimer');
         if (timerElement) {
             timerElement.style.display = 'inline';
@@ -961,13 +949,20 @@ class Chat {
             }
         }.bind(this);
 
+        // Xử lý remote stream
         this.peerConnection.ontrack = function (event) {
-            console.log("Nhận track từ peer");
-            let remoteStream = event.streams[0];
-            document.getElementById("remoteVideo").srcObject = remoteStream;
-            
-            // Thiết lập audio indicator cho remote video
-            this.setupAudioLevelIndicator(remoteStream, "remoteVideo");
+            console.log("Nhận track từ peer:", event);
+            const remoteVideo = document.getElementById("remoteVideo");
+            if (remoteVideo) {
+                if (event.streams && event.streams[0]) {
+                    console.log("Đã nhận remote stream");
+                    remoteVideo.srcObject = event.streams[0];
+                    remoteVideo.play().catch(err => console.error("Lỗi khi play remote video:", err));
+                    
+                    // Thiết lập audio indicator cho remote video
+                    this.setupAudioLevelIndicator(event.streams[0], "remoteVideo");
+                }
+            }
         }.bind(this);
 
         try {
@@ -977,32 +972,50 @@ class Chat {
                     audio: true,
                     video: true
                 });
-                stream.getTracks().forEach(track => this.peerConnection.addTrack(track, stream));
-                document.getElementById("localVideo").srcObject = stream;
                 
-                // Thiết lập audio indicator cho local video
-                this.setupAudioLevelIndicator(stream, "localVideo");
+                // Thêm track vào peer connection
+                stream.getTracks().forEach(track => {
+                    this.peerConnection.addTrack(track, stream);
+                });
+                
+                // Hiển thị local video
+                const localVideo = document.getElementById("localVideo");
+                if (localVideo) {
+                    localVideo.srcObject = stream;
+                    localVideo.play().catch(err => console.error("Lỗi khi play local video:", err));
+                    
+                    // Thiết lập audio indicator cho local video
+                    this.setupAudioLevelIndicator(stream, "localVideo");
+                }
             } catch (videoError) {
                 console.log("Không thể lấy video, thử chỉ lấy audio:", videoError);
                 const audioStream = await navigator.mediaDevices.getUserMedia({
                     audio: true,
                     video: false
                 });
-                audioStream.getTracks().forEach(track => this.peerConnection.addTrack(track, audioStream));
+                
+                // Thêm track vào peer connection
+                audioStream.getTracks().forEach(track => {
+                    this.peerConnection.addTrack(track, audioStream);
+                });
+                
+                // Hiển thị local audio
                 const localVideo = document.getElementById("localVideo");
-                localVideo.srcObject = audioStream;
-                localVideo.style.backgroundColor = "#333";
-                localVideo.style.display = "flex";
-                localVideo.style.alignItems = "center";
-                localVideo.style.justifyContent = "center";
-                
-                // Thiết lập audio indicator cho local video (audio only)
-                this.setupAudioLevelIndicator(audioStream, "localVideo");
-                
-                // Thêm icon microphone
-                const micIcon = document.createElement("i");
-                micIcon.className = "fas fa-microphone fa-3x text-white";
-                localVideo.appendChild(micIcon);
+                if (localVideo) {
+                    localVideo.srcObject = audioStream;
+                    localVideo.style.backgroundColor = "#333";
+                    localVideo.style.display = "flex";
+                    localVideo.style.alignItems = "center";
+                    localVideo.style.justifyContent = "center";
+                    
+                    // Thêm icon microphone
+                    const micIcon = document.createElement("i");
+                    micIcon.className = "fas fa-microphone fa-3x text-white";
+                    localVideo.appendChild(micIcon);
+                    
+                    // Thiết lập audio indicator cho local video (audio only)
+                    this.setupAudioLevelIndicator(audioStream, "localVideo");
+                }
             }
         } catch (error) {
             console.error("Không thể truy cập thiết bị media:", error);
