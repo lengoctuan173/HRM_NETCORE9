@@ -767,13 +767,22 @@ class Chat {
             const configuration = {
                 iceServers: [
                     {
+                        urls: [ "stun:ss-turn2.xirsys.com" ]
+                    }, 
+                    {
+                        username: "iQxaY79tknLKnsa9xrW3NnZEh_jZGfKc_al4qSBAhgG2TkbHbVXbfuY-2C7BOBkpAAAAAGf8_H5sZW5nb2N0dWFu",
+                        credential: "3947ff04-192a-11f0-a86f-0242ac140004",
                         urls: [
-                            'stun:stun.l.google.com:19302',
-                            'stun:stun1.l.google.com:19302',
-                            'stun:stun2.l.google.com:19302',
-                            'stun:stun3.l.google.com:19302',
-                            'stun:stun4.l.google.com:19302'
+                            "turn:ss-turn2.xirsys.com:80?transport=udp",
+                            "turn:ss-turn2.xirsys.com:3478?transport=udp",
+                            "turn:ss-turn2.xirsys.com:80?transport=tcp",
+                            "turn:ss-turn2.xirsys.com:3478?transport=tcp",
+                            "turns:ss-turn2.xirsys.com:443?transport=tcp",
+                            "turns:ss-turn2.xirsys.com:5349?transport=tcp"
                         ]
+                    },
+                    {
+                        urls: ['stun:stun.l.google.com:19302']
                     }
                 ],
                 iceTransportPolicy: 'all',
