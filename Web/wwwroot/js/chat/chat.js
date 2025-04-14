@@ -647,41 +647,24 @@ class Chat {
                 } : false
             };
 
-            // Try to get the stream with available devices
-            console.log("Trying to get media stream with constraints:", constraints);
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            
-            // Log tracks for debugging
-            stream.getTracks().forEach(track => {
-                console.log(`Got ${track.kind} track:`, track.label, track.enabled);
-            });
+            // If no devices are available, throw error
+            if (!hasAudio && (!hasVideo || audioOnly)) {
+                throw new Error('No audio or video devices found');
+            }
 
+            // Try to get the stream
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
             return stream;
         } catch (error) {
             console.error('Media setup error:', error);
-            
-            // If video fails or is not available, try audio only
-            if (!audioOnly) {
+
+            // Try fallback to audio only if video fails
+            if (!audioOnly && error.name === 'NotFoundError') {
                 console.log('Falling back to audio only...');
                 return this.setupMediaStream(true);
             }
 
-            // If audio only also fails, check if at least audio is available
-            if (error.name === 'NotFoundError' || error.name === 'NotAllowedError') {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const hasAudio = devices.some(device => device.kind === 'audioinput');
-                
-                if (hasAudio) {
-                    // Try one more time with just audio
-                    try {
-                        return await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-                    } catch (audioError) {
-                        console.error('Final audio fallback failed:', audioError);
-                        throw audioError;
-                    }
-                }
-            }
-
+            this.handleCallError(error, 'setupMediaStream');
             throw error;
         }
     }
@@ -926,7 +909,7 @@ class Chat {
 
     async initializePeerConnection(senderId) {
         console.log("Khởi tạo peer connection với:", senderId);
-        
+
         // Đóng kết nối cũ nếu có
         if (this.peerConnection) {
             this.peerConnection.close();
@@ -940,93 +923,31 @@ class Chat {
         };
 
         this.peerConnection = new RTCPeerConnection(configuration);
-        let remoteStream = null;
-
-        // Xử lý remote stream
-        this.peerConnection.ontrack = async (event) => {
-            console.log("Nhận track từ peer:", event);
-            if (event.streams && event.streams[0]) {
-                remoteStream = event.streams[0];
-                console.log("Đã lưu remote stream, chờ kết nối ICE thành công");
-            }
-        };
 
         // Xử lý ICE candidate
-        this.peerConnection.onicecandidate = (event) => {
+        this.peerConnection.onicecandidate = function (event) {
             if (event.candidate) {
                 console.log("Gửi ICE candidate đến:", senderId);
                 this.sendCallSignal(senderId, "candidate", event.candidate);
             }
-        };
+        }.bind(this);
 
         // Xử lý kết nối ICE state
-        this.peerConnection.oniceconnectionstatechange = async () => {
+        this.peerConnection.oniceconnectionstatechange = function () {
             console.log("ICE connection state:", this.peerConnection.iceConnectionState);
             switch (this.peerConnection.iceConnectionState) {
                 case 'connected':
+                    // Khi kết nối thành công, hiển thị giao diện cuộc gọi cho cả hai bên
                     this.showModal();
                     document.getElementById("incoming-call").style.display = 'none';
                     document.getElementById("call-interface").style.display = 'block';
                     document.getElementById("connectionStatus").style.display = 'none';
                     this.updateCallState(CallState.IN_CALL);
-                    
-                    // Xử lý remote stream sau khi ICE connected
-                    if (remoteStream) {
-                        try {
-                            const remoteVideo = document.getElementById("remoteVideo");
-                            if (remoteVideo) {
-                                // Dừng stream cũ nếu có
-                                if (remoteVideo.srcObject) {
-                                    const oldStream = remoteVideo.srcObject;
-                                    oldStream.getTracks().forEach(track => track.stop());
-                                }
-
-                                // Reset video element
-                                remoteVideo.srcObject = null;
-                                await new Promise(resolve => setTimeout(resolve, 100));
-
-                                // Gán stream mới
-                                console.log("Thiết lập remote stream sau khi ICE connected");
-                                remoteVideo.srcObject = remoteStream;
-                                
-                                // Đợi video load xong metadata
-                                await new Promise((resolve) => {
-                                    remoteVideo.onloadedmetadata = () => {
-                                        console.log("Remote video metadata loaded");
-                                        resolve();
-                                    };
-                                });
-
-                                // Play video
-                                console.log("Bắt đầu play remote video");
-                                await remoteVideo.play();
-                                console.log("Remote video đang chạy");
-
-                                // Thiết lập audio indicator
-                                this.setupAudioLevelIndicator(remoteStream, "remoteVideo");
-                            }
-                        } catch (error) {
-                            console.error("Lỗi khi xử lý remote stream:", error);
-                            if (error.name === 'AbortError') {
-                                console.log("Thử lại play remote video sau 500ms");
-                                setTimeout(async () => {
-                                    try {
-                                        const remoteVideo = document.getElementById("remoteVideo");
-                                        await remoteVideo.play();
-                                        console.log("Play remote video thành công sau khi thử lại");
-                                    } catch (retryError) {
-                                        console.error("Vẫn không thể play remote video:", retryError);
-                                    }
-                                }, 500);
-                            }
-                        }
-                    }
-                    
                     this.startCallTimer();
                     break;
                 case 'disconnected':
                     console.log('Kết nối ICE bị ngắt');
-                    document.getElementById("statusMessage").textContent = 'Kết nối bị ngắt...';
+                    this.endCall();
                     break;
                 case 'failed':
                     console.log('Kết nối ICE thất bại');
@@ -1034,55 +955,116 @@ class Chat {
                     this.endCall();
                     break;
             }
-        };
+        }.bind(this);
+
+        // Xử lý remote stream
+        this.peerConnection.ontrack = async function (event) {
+            console.log("Nhận track từ peer:", event);
+            const remoteVideo = document.getElementById("remoteVideo");
+            if (remoteVideo && event.streams && event.streams[0]) {
+                try {
+                    // Dừng stream cũ nếu có
+                    if (remoteVideo.srcObject) {
+                        const oldStream = remoteVideo.srcObject;
+                        oldStream.getTracks().forEach(track => track.stop());
+                    }
+
+                    // Reset video element
+                    remoteVideo.srcObject = null;
+                    await new Promise(resolve => setTimeout(resolve, 100));
+
+                    // Gán stream mới
+                    console.log("Đang thiết lập remote stream");
+                    remoteVideo.srcObject = event.streams[0];
+
+                    // Đợi video load xong metadata
+                    await new Promise((resolve) => {
+                        remoteVideo.onloadedmetadata = () => {
+                            console.log("Remote video metadata loaded");
+                            resolve();
+                        };
+                    });
+
+                    // Play video
+                    console.log("Bắt đầu play remote video");
+                    await remoteVideo.play();
+                    console.log("Remote video đang chạy");
+
+                    // Thiết lập audio indicator
+                    this.setupAudioLevelIndicator(event.streams[0], "remoteVideo");
+                } catch (error) {
+                    console.error("Lỗi khi xử lý remote stream:", error);
+                    if (error.name === 'AbortError') {
+                        console.log("Thử lại play remote video sau 500ms");
+                        setTimeout(async () => {
+                            try {
+                                await remoteVideo.play();
+                                console.log("Play remote video thành công sau khi thử lại");
+                            } catch (retryError) {
+                                console.error("Vẫn không thể play remote video:", retryError);
+                            }
+                        }, 500);
+                    }
+                }
+            }
+        }.bind(this);
 
         try {
-            // Thiết lập media stream
-            console.log("Đang thiết lập media stream...");
-            const stream = await this.setupMediaStream();
-            
-            // Thêm tracks vào peer connection
-            stream.getTracks().forEach(track => {
-                console.log(`Thêm track ${track.kind} vào peer connection`);
-                this.peerConnection.addTrack(track, stream);
-            });
+            // Thử lấy cả audio và video
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                    video: true
+                });
 
-            // Hiển thị local video/audio
-            const localVideo = document.getElementById("localVideo");
-            if (localVideo) {
-                localVideo.srcObject = stream;
-                await localVideo.play().catch(err => console.error("Lỗi khi play local video:", err));
+                // Thêm track vào peer connection
+                stream.getTracks().forEach(track => {
+                    this.peerConnection.addTrack(track, stream);
+                });
 
-                // Nếu không có video track, hiển thị icon microphone
-                if (!stream.getVideoTracks().length) {
+                // Hiển thị local video
+                const localVideo = document.getElementById("localVideo");
+                if (localVideo) {
+                    localVideo.srcObject = stream;
+                    localVideo.play().catch(err => console.error("Lỗi khi play local video:", err));
+
+                    // Thiết lập audio indicator cho local video
+                    this.setupAudioLevelIndicator(stream, "localVideo");
+                }
+            } catch (videoError) {
+                console.log("Không thể lấy video, thử chỉ lấy audio:", videoError);
+                const audioStream = await navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                    video: false
+                });
+
+                // Thêm track vào peer connection
+                audioStream.getTracks().forEach(track => {
+                    this.peerConnection.addTrack(track, audioStream);
+                });
+
+                // Hiển thị local audio
+                const localVideo = document.getElementById("localVideo");
+                if (localVideo) {
+                    localVideo.srcObject = audioStream;
                     localVideo.style.backgroundColor = "#333";
                     localVideo.style.display = "flex";
                     localVideo.style.alignItems = "center";
                     localVideo.style.justifyContent = "center";
-                    
-                    // Xóa icon cũ nếu có
-                    const oldIcon = localVideo.querySelector('.fa-microphone');
-                    if (oldIcon) oldIcon.remove();
-                    
-                    // Thêm icon microphone mới
+
+                    // Thêm icon microphone
                     const micIcon = document.createElement("i");
                     micIcon.className = "fas fa-microphone fa-3x text-white";
                     localVideo.appendChild(micIcon);
-                }
 
-                // Thiết lập audio indicator
-                this.setupAudioLevelIndicator(stream, "localVideo");
+                    // Thiết lập audio indicator cho local video (audio only)
+                    this.setupAudioLevelIndicator(audioStream, "localVideo");
+                }
             }
         } catch (error) {
-            console.error("Lỗi khi thiết lập media:", error);
-            // Nếu lỗi liên quan đến video, thử lại với audio only
-            if (error.name === 'NotFoundError' && error.message.includes('video')) {
-                console.log("Thử lại với audio only...");
-                await this.initializePeerConnection(senderId);
-            } else {
-                this.showNotification('Không thể truy cập micro hoặc camera. Vui lòng kiểm tra quyền truy cập thiết bị.', 'warning');
-                throw error;
-            }
+            console.error("Không thể truy cập thiết bị media:", error);
+            this.showNotification('Không thể truy cập micro hoặc camera. Vui lòng kiểm tra quyền truy cập thiết bị.', 'warning');
+            throw error;
         }
 
         return this.peerConnection;
