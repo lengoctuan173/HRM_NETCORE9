@@ -42,6 +42,7 @@
     <Folder Include="Helpers\" />
     <Folder Include="wwwroot\content\fonts\webfonts\" />
     <Folder Include="wwwroot\content\libs\" />
+    <Folder Include="wwwroot\content\sounds\" />
     <Folder Include="wwwroot\content\theme\gull\" />
     <Folder Include="wwwroot\uploads\" />
   </ItemGroup>

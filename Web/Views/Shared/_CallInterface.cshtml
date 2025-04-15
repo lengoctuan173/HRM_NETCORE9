@@ -1,4 +1,132 @@
-﻿<div class="modal fade" id="callModal" tabindex="-1" role="dialog" aria-labelledby="callModalLabel" data-backdrop="static">
+﻿<!-- Thêm style cho giao diện cuộc gọi -->
+<style>
+    .video-container {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .local-video-wrapper,
+    .remote-video-wrapper {
+        position: relative;
+        width: 320px;
+        height: 240px;
+        background-color: #000;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    #localVideo,
+    #remoteVideo {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        background-color: #000;
+    }
+
+    .call-controls {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        padding: 1rem;
+    }
+
+    .call-controls button {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    #endCallButton {
+        width: auto;
+        border-radius: 24px;
+        padding: 0 2rem;
+    }
+
+    .incoming-call-animation {
+        animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+        0% {
+            transform: scale(1);
+            opacity: 1;
+        }
+        50% {
+            transform: scale(1.1);
+            opacity: 0.7;
+        }
+        100% {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+
+    .badge {
+        position: absolute;
+        bottom: 8px;
+        left: 8px;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+        z-index: 1;
+    }
+
+    .audio-indicator {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        z-index: 1;
+    }
+
+    #callModal .modal-content {
+        background-color: #fff;
+        border-radius: 12px;
+    }
+
+    #callModal .modal-header {
+        border-bottom: 1px solid #dee2e6;
+        padding: 1rem;
+    }
+
+    #callModal .modal-body {
+        padding: 1.5rem;
+    }
+
+    #connectionStatus,
+    #callError {
+        margin-bottom: 1rem;
+    }
+
+    .incoming-call {
+        text-align: center;
+        padding: 2rem;
+    }
+
+    #callerName {
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .call-timer {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-bottom: 1rem;
+    }
+</style>
+
+<div class="modal fade" id="callModal" tabindex="-1" role="dialog" aria-labelledby="callModalLabel" data-backdrop="static">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
@@ -27,27 +155,31 @@
 
                 <!-- Giao diện cuộc gọi -->
                 <div id="call-interface" class="text-center" style="display:none;" role="region" aria-label="Giao diện cuộc gọi">
-                    <div class="video-container d-flex justify-content-center gap-3 mb-3">
-                        <div class="local-video-wrapper position-relative">
-                            <video id="localVideo" autoplay muted playsinline class="rounded border border-primary" aria-label="Video của bạn"></video>
-                            <span class="badge badge-primary position-absolute bottom-0 left-0 m-2">Bạn</span>
-                            <div class="audio-indicator position-absolute top-0 right-0 m-2" role="status" aria-label="Trạng thái âm thanh"></div>
+                    <div class="video-container">
+                        <div class="local-video-wrapper">
+                            <video id="localVideo" autoplay muted playsinline></video>
+                            <span class="badge bg-primary">Bạn</span>
+                            <div id="localAudioIndicator" class="audio-indicator">
+                                <i class="fas fa-microphone"></i>
+                            </div>
                         </div>
-                        <div class="remote-video-wrapper position-relative">
-                            <video id="remoteVideo" autoplay playsinline class="rounded border border-danger" aria-label="Video của người gọi"></video>
-                            <span class="badge badge-danger position-absolute bottom-0 left-0 m-2" id="remoteUserName">Đối phương</span>
-                            <div class="audio-indicator position-absolute top-0 right-0 m-2" role="status" aria-label="Trạng thái âm thanh"></div>
+                        <div class="remote-video-wrapper">
+                            <video id="remoteVideo" autoplay playsinline></video>
+                            <span class="badge bg-danger" id="remoteUserName">Đối phương</span>
+                            <div id="remoteAudioIndicator" class="audio-indicator">
+                                <i class="fas fa-volume-up"></i>
+                            </div>
                         </div>
                     </div>
-                    <div class="call-controls" role="toolbar" aria-label="Điều khiển cuộc gọi">
-                        <button class="btn btn-outline-secondary rounded-circle mr-2" id="toggleMicButton" aria-label="Bật/tắt microphone">
-                            <i class="fas fa-microphone" aria-hidden="true"></i>
+                    <div class="call-controls">
+                        <button class="btn btn-outline-secondary" id="toggleMicButton" aria-label="Bật/tắt microphone">
+                            <i class="fas fa-microphone"></i>
                         </button>
                         <button class="btn btn-danger" id="endCallButton" aria-label="Kết thúc cuộc gọi">
-                            <i class="fas fa-phone-slash" aria-hidden="true"></i> Kết thúc
+                            <i class="fas fa-phone-slash"></i> Kết thúc
                         </button>
-                        <button class="btn btn-outline-secondary rounded-circle ml-2" id="toggleSpeakerButton" aria-label="Bật/tắt loa">
-                            <i class="fas fa-volume-up" aria-hidden="true"></i>
+                        <button class="btn btn-outline-secondary" id="toggleSpeakerButton" aria-label="Bật/tắt loa">
+                            <i class="fas fa-volume-up"></i>
                         </button>
                     </div>
                 </div>
@@ -55,19 +187,19 @@
                 <!-- Giao diện khi có cuộc gọi đến -->
                 <div id="incoming-call" class="text-center py-4" style="display:none;" role="region" aria-label="Cuộc gọi đến">
                     <div class="incoming-call-animation mb-4">
-                        <i class="fas fa-phone-volume fa-4x text-primary" aria-hidden="true"></i>
+                        <i class="fas fa-phone-volume fa-4x text-primary"></i>
                     </div>
                     <h4 class="mb-3">📞 Cuộc gọi đến</h4>
                     <p id="callerName" class="lead mb-4">Người gọi...</p>
-                    <div class="call-timer small text-muted mb-4">
+                    <div class="call-timer mb-4">
                         Tự động từ chối sau <span id="timeoutCounter">30</span> giây
                     </div>
                     <div class="d-flex justify-content-center gap-3">
-                        <button class="btn btn-success btn-lg px-4 mr-2" id="acceptCallButton" aria-label="Chấp nhận cuộc gọi">
-                            <i class="fas fa-phone" aria-hidden="true"></i> Chấp nhận
+                        <button class="btn btn-success btn-lg px-4 me-2" id="acceptCallButton">
+                            <i class="fas fa-phone"></i> Chấp nhận
                         </button>
-                        <button class="btn btn-danger btn-lg px-4" id="rejectCallButton" aria-label="Từ chối cuộc gọi">
-                            <i class="fas fa-phone-slash" aria-hidden="true"></i> Từ chối
+                        <button class="btn btn-danger btn-lg px-4" id="rejectCallButton">
+                            <i class="fas fa-phone-slash"></i> Từ chối
                         </button>
                     </div>
                 </div>

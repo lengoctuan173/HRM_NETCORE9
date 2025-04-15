@@ -192,4 +192,34 @@
   <data name="EmailExistsErr" xml:space="preserve">
     <value>Email has been registered in the system, please return to the login page!</value>
   </data>
+  <data name="GroupName" xml:space="preserve">
+    <value>Group name</value>
+  </data>
+  <data name="CreateGroupNew" xml:space="preserve">
+    <value>Create group new</value>
+  </data>
+  <data name="CreateGroup" xml:space="preserve">
+    <value>Create group</value>
+  </data>
+  <data name="Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Selectacontract" xml:space="preserve">
+    <value>Select a contact or group to start chatting</value>
+  </data>
+  <data name="Contacts" xml:space="preserve">
+    <value>Contacts</value>
+  </data>
+  <data name="SelectMembers" xml:space="preserve">
+    <value>Select Members</value>
+  </data>
+  <data name="EnterGroupName" xml:space="preserve">
+    <value>Enter group name</value>
+  </data>
+  <data name="Groups" xml:space="preserve">
+    <value>Groups</value>
+  </data>
+  <data name="Searchcontactsandgroups" xml:space="preserve">
+    <value>Search contacts &amp; groups</value>
+  </data>
 </root>

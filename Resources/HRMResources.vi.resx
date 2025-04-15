@@ -192,4 +192,34 @@
   <data name="EmailExistsErr" xml:space="preserve">
     <value>Email đã được đăng ký trên hệ thống, vui lòng quay lại trang đăng nhập!</value>
   </data>
+  <data name="GroupName" xml:space="preserve">
+    <value>Tên nhóm</value>
+  </data>
+  <data name="CreateGroupNew" xml:space="preserve">
+    <value>Tạo nhóm mới</value>
+  </data>
+  <data name="CreateGroup" xml:space="preserve">
+    <value>Tạo nhóm</value>
+  </data>
+  <data name="Close" xml:space="preserve">
+    <value>Đóng</value>
+  </data>
+  <data name="Selectacontract" xml:space="preserve">
+    <value>Chọn một liên hệ hoặc nhóm để bắt đầu trò chuyện</value>
+  </data>
+  <data name="Contacts" xml:space="preserve">
+    <value>Liên hệ</value>
+  </data>
+  <data name="SelectMembers" xml:space="preserve">
+    <value>Chọn thành viên</value>
+  </data>
+  <data name="EnterGroupName" xml:space="preserve">
+    <value>Nhập tên nhóm</value>
+  </data>
+  <data name="Groups" xml:space="preserve">
+    <value>Nhóm</value>
+  </data>
+  <data name="Searchcontactsandgroups" xml:space="preserve">
+    <value>Tìm kiếm liên hệ và nhóm</value>
+  </data>
 </root>
