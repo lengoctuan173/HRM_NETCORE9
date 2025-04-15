@@ -494,6 +494,57 @@ class Chat {
         }
     }
 
+    async handleCallAnswer(senderId, answerData) {
+        try {
+            console.log("Xử lý answer từ:", senderId);
+            console.log("Answer data:", answerData);
+
+            if (!this.peerConnection) {
+                console.error("Không có peer connection");
+                return;
+            }
+
+            const answerDesc = new RTCSessionDescription({
+                type: 'answer',
+                sdp: answerData.sdp
+            });
+
+            await this.peerConnection.setRemoteDescription(answerDesc);
+            console.log("Đã set remote description từ answer");
+
+            // Xử lý các pending candidates sau khi set remote description
+            if (this.pendingCandidates.length > 0) {
+                console.log("Xử lý", this.pendingCandidates.length, "ICE candidates đang chờ");
+                for (const pendingCandidate of this.pendingCandidates) {
+                    if (pendingCandidate.senderId === senderId) {
+                        try {
+                            await this.peerConnection.addIceCandidate(
+                                new RTCIceCandidate(pendingCandidate.candidate)
+                            );
+                            console.log("Đã thêm pending ICE candidate thành công");
+                        } catch (error) {
+                            console.error("Lỗi khi thêm pending ICE candidate:", error);
+                        }
+                    }
+                }
+                this.pendingCandidates = []; // Xóa các candidates đã xử lý
+            }
+
+            // Cập nhật UI cho người gọi
+            document.getElementById("call-interface").style.display = 'block';
+            document.getElementById("connectionStatus").style.display = 'none';
+            document.getElementById("incoming-call").style.display = 'none';
+
+            // Cập nhật trạng thái cuộc gọi
+            this.updateCallState(CallState.IN_CALL);
+            this.startCallTimer();
+
+        } catch (error) {
+            console.error("Lỗi khi xử lý answer:", error);
+            this.handleCallError(error, 'handleCallAnswer');
+        }
+    }
+
     async handleIncomingCall(senderId, offerData) {
         console.log("Xử lý cuộc gọi đến từ:", senderId, "State hiện tại:", this.currentCallState);
         console.log("Offer data received:", offerData);
@@ -512,6 +563,7 @@ class Chat {
             // Hiển thị giao diện cuộc gọi đến
             document.getElementById("incoming-call").style.display = 'block';
             document.getElementById("call-interface").style.display = 'none';
+            document.getElementById("connectionStatus").style.display = 'none';
             document.getElementById("acceptCallButton").style.display = 'inline-block';
             document.getElementById("rejectCallButton").style.display = 'inline-block';
             this.showModal();
@@ -578,12 +630,8 @@ class Chat {
                             
                             await this.peerConnection.setRemoteDescription(offerDesc);
                             
-                            // Tạo answer
-                            console.log("Creating answer");
-                            const answer = await this.peerConnection.createAnswer({
-                                offerToReceiveAudio: true,
-                                offerToReceiveVideo: true
-                            });
+                            // Tạo answer với transceivers cho cả audio và video
+                            const answer = await this.peerConnection.createAnswer();
                             
                             // Set local description
                             console.log("Setting local description");
@@ -629,57 +677,6 @@ class Chat {
             console.error("Lỗi khi xử lý cuộc gọi đến:", error);
             this.handleCallError(error, 'handleIncomingCall');
             this.closeModal();
-        }
-    }
-
-    async handleCallAnswer(senderId, answerData) {
-        try {
-            console.log("Xử lý answer từ:", senderId);
-            console.log("Answer data:", answerData);
-
-            if (!this.peerConnection) {
-                console.error("Không có peer connection");
-                return;
-            }
-
-            const answerDesc = new RTCSessionDescription({
-                type: 'answer',
-                sdp: answerData.sdp
-            });
-
-            await this.peerConnection.setRemoteDescription(answerDesc);
-            console.log("Đã set remote description từ answer");
-
-            // Xử lý các pending candidates sau khi set remote description
-            if (this.pendingCandidates.length > 0) {
-                console.log("Xử lý", this.pendingCandidates.length, "ICE candidates đang chờ");
-                for (const pendingCandidate of this.pendingCandidates) {
-                    if (pendingCandidate.senderId === senderId) {
-                        try {
-                            await this.peerConnection.addIceCandidate(
-                                new RTCIceCandidate(pendingCandidate.candidate)
-                            );
-                            console.log("Đã thêm pending ICE candidate thành công");
-                        } catch (error) {
-                            console.error("Lỗi khi thêm pending ICE candidate:", error);
-                        }
-                    }
-                }
-                this.pendingCandidates = []; // Xóa các candidates đã xử lý
-            }
-
-            // Cập nhật UI cho người gọi
-            document.getElementById("call-interface").style.display = 'block';
-            document.getElementById("connectionStatus").style.display = 'none';
-            document.getElementById("incoming-call").style.display = 'none';
-
-            // Cập nhật trạng thái cuộc gọi
-            this.updateCallState(CallState.IN_CALL);
-            this.startCallTimer();
-
-        } catch (error) {
-            console.error("Lỗi khi xử lý answer:", error);
-            this.handleCallError(error, 'handleCallAnswer');
         }
     }
 
@@ -832,34 +829,51 @@ class Chat {
             const stream = event.streams[0];
             
             try {
-                console.log('Xử lý remote stream:', {
+                // Log chi tiết về stream và tracks
+                const streamInfo = {
                     hasAudioTracks: stream.getAudioTracks().length,
                     hasVideoTracks: stream.getVideoTracks().length,
                     tracks: stream.getTracks().map(track => ({
                         kind: track.kind,
                         enabled: track.enabled,
                         muted: track.muted,
-                        readyState: track.readyState
+                        readyState: track.readyState,
+                        id: track.id
                     }))
-                });
+                };
+                console.log('Chi tiết remote stream:', streamInfo);
 
                 // Dừng stream cũ nếu có
                 if (remoteVideo.srcObject) {
                     remoteVideo.srcObject.getTracks().forEach(track => track.stop());
                 }
                 
-                // Gán stream mới
+                // Gán stream mới và đảm bảo thuộc tính srcObject được set đúng
+                remoteVideo.srcObject = null;
+                await new Promise(resolve => setTimeout(resolve, 100));
                 remoteVideo.srcObject = stream;
                 
                 // Kiểm tra xem có video track không
                 const hasVideoTrack = stream.getVideoTracks().length > 0;
                 console.log('Remote stream có video track:', hasVideoTrack);
                 
-                // Luôn hiển thị video element với background đen
+                // Thiết lập style cho video element
                 remoteVideo.style.display = 'block';
                 remoteVideo.style.backgroundColor = '#000000';
                 
-                // Nếu chỉ có audio, hiển thị icon microphone ở giữa
+                if (hasVideoTrack) {
+                    remoteVideo.style.width = '100%';
+                    remoteVideo.style.height = '100%';
+                    remoteVideo.style.objectFit = 'contain';
+                    
+                    // Đảm bảo video track được kích hoạt
+                    stream.getVideoTracks().forEach(track => {
+                        track.enabled = true;
+                        console.log('Video track settings:', track.getSettings());
+                    });
+                }
+                
+                // Xử lý icon audio only
                 const audioOnlyIcon = document.getElementById('audioOnlyIcon');
                 if (audioOnlyIcon) {
                     if (!hasVideoTrack) {
@@ -871,23 +885,26 @@ class Chat {
                         audioOnlyIcon.style.transform = 'translate(-50%, -50%)';
                         audioOnlyIcon.style.color = '#ffffff';
                         audioOnlyIcon.style.zIndex = '1';
-                        
-                        // Thông báo cuộc gọi audio
-                        this.showNotification('Cuộc gọi audio đã được kết nối', 'info');
                     } else {
                         audioOnlyIcon.style.display = 'none';
                     }
                 }
 
-                // Đảm bảo video không bị mute trừ khi người dùng đã tắt âm thanh
+                // Đảm bảo audio được xử lý đúng
                 remoteVideo.muted = this.isSpeakerMuted;
-
-                // Đặt kích thước video phù hợp
-                if (hasVideoTrack) {
-                    remoteVideo.style.width = '100%';
-                    remoteVideo.style.height = '100%';
-                    remoteVideo.style.objectFit = 'contain';
-                }
+                
+                // Thêm event listeners cho video element
+                remoteVideo.onloadedmetadata = () => {
+                    console.log('Video metadata loaded:', {
+                        videoWidth: remoteVideo.videoWidth,
+                        videoHeight: remoteVideo.videoHeight,
+                        readyState: remoteVideo.readyState
+                    });
+                };
+                
+                remoteVideo.onplay = () => {
+                    console.log('Video bắt đầu phát');
+                };
 
                 // Thử phát video
                 try {
@@ -897,7 +914,7 @@ class Chat {
                     // Ẩn thông báo "đang kết nối" khi stream đã phát được
                     document.getElementById("connectionStatus").style.display = 'none';
                     
-                    // Log thông tin về tracks
+                    // Log thông tin về tracks đang hoạt động
                     stream.getTracks().forEach(track => {
                         console.log(`Track ${track.kind} đang hoạt động:`, {
                             enabled: track.enabled,
@@ -908,24 +925,22 @@ class Chat {
                         });
                     });
 
-                    // Thêm event listener để theo dõi trạng thái video
-                    if (hasVideoTrack) {
-                        const videoTrack = stream.getVideoTracks()[0];
-                        videoTrack.onended = () => {
-                            console.log('Video track đã kết thúc');
-                            this.showNotification('Video từ người dùng khác đã dừng', 'info');
+                    // Thêm event listeners cho tracks
+                    stream.getTracks().forEach(track => {
+                        track.onended = () => {
+                            console.log(`${track.kind} track đã kết thúc`);
                         };
-                        videoTrack.onmute = () => {
-                            console.log('Video track đã bị mute');
+                        track.onmute = () => {
+                            console.log(`${track.kind} track đã bị mute`);
                         };
-                        videoTrack.onunmute = () => {
-                            console.log('Video track đã được unmute');
+                        track.onunmute = () => {
+                            console.log(`${track.kind} track đã được unmute`);
                         };
-                    }
+                    });
                 } catch (playError) {
                     console.error('Lỗi khi phát remote video:', playError);
                     
-                    // Thử lại một lần nữa sau 1 giây
+                    // Thử lại sau 1 giây
                     setTimeout(async () => {
                         try {
                             await remoteVideo.play();
@@ -1538,8 +1553,12 @@ class Chat {
             // Khởi tạo peer connection
             await this.initializePeerConnection(receiverId);
 
-            // Tạo offer
-            const offer = await this.peerConnection.createOffer();
+            // Tạo offer với transceivers cho cả audio và video
+            const offer = await this.peerConnection.createOffer({
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true
+            });
+            
             await this.peerConnection.setLocalDescription(offer);
 
             // Gửi offer đến người nhận
@@ -1548,6 +1567,7 @@ class Chat {
                 sdp: offer.sdp,
                 senderName: document.getElementById("currentUser").getAttribute("data-username")
             });
+            
             this.showModal();
             document.getElementById("call-interface").style.display = 'block';
             document.getElementById("connectionStatus").style.display = 'block';
