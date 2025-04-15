@@ -831,52 +831,87 @@ class Chat {
         if (remoteVideo && event.streams && event.streams[0]) {
             const stream = event.streams[0];
             
-            // Dừng stream cũ nếu có
-            if (remoteVideo.srcObject) {
-                remoteVideo.srcObject.getTracks().forEach(track => track.stop());
-            }
-            
-            remoteVideo.srcObject = stream;
-            
-            // Kiểm tra xem có video track không
-            const hasVideoTrack = stream.getVideoTracks().length > 0;
-            
-            // Luôn hiển thị video element với background đen
-            remoteVideo.style.display = 'block';
-            remoteVideo.style.backgroundColor = '#000000';
-            
-            // Nếu chỉ có audio, hiển thị icon microphone ở giữa
-            const audioOnlyIcon = document.getElementById('audioOnlyIcon');
-            if (audioOnlyIcon) {
-                if (!hasVideoTrack) {
-                    audioOnlyIcon.innerHTML = '<i class="fas fa-microphone fa-3x"></i>';
-                    audioOnlyIcon.style.display = 'flex';
-                    audioOnlyIcon.style.position = 'absolute';
-                    audioOnlyIcon.style.top = '50%';
-                    audioOnlyIcon.style.left = '50%';
-                    audioOnlyIcon.style.transform = 'translate(-50%, -50%)';
-                    audioOnlyIcon.style.color = '#ffffff';
-                    audioOnlyIcon.style.zIndex = '1';
-                    
-                    // Thông báo cuộc gọi audio
-                    this.showNotification('Cuộc gọi audio đã được kết nối', 'info');
-                } else {
-                    audioOnlyIcon.style.display = 'none';
-                }
-            }
-
             try {
-                // Sử dụng phương thức phát an toàn
-                const playSuccess = await this.safePlay(remoteVideo);
-                if (playSuccess) {
-                    console.log(`Đang phát ${hasVideoTrack ? 'video' : 'audio'} từ người dùng khác`);
+                // Dừng stream cũ nếu có
+                if (remoteVideo.srcObject) {
+                    remoteVideo.srcObject.getTracks().forEach(track => track.stop());
+                }
+                
+                // Gán stream mới
+                remoteVideo.srcObject = stream;
+                
+                // Kiểm tra xem có video track không
+                const hasVideoTrack = stream.getVideoTracks().length > 0;
+                console.log('Remote stream có video track:', hasVideoTrack);
+                
+                // Luôn hiển thị video element với background đen
+                remoteVideo.style.display = 'block';
+                remoteVideo.style.backgroundColor = '#000000';
+                
+                // Nếu chỉ có audio, hiển thị icon microphone ở giữa
+                const audioOnlyIcon = document.getElementById('audioOnlyIcon');
+                if (audioOnlyIcon) {
+                    if (!hasVideoTrack) {
+                        audioOnlyIcon.innerHTML = '<i class="fas fa-microphone fa-3x"></i>';
+                        audioOnlyIcon.style.display = 'flex';
+                        audioOnlyIcon.style.position = 'absolute';
+                        audioOnlyIcon.style.top = '50%';
+                        audioOnlyIcon.style.left = '50%';
+                        audioOnlyIcon.style.transform = 'translate(-50%, -50%)';
+                        audioOnlyIcon.style.color = '#ffffff';
+                        audioOnlyIcon.style.zIndex = '1';
+                        
+                        // Thông báo cuộc gọi audio
+                        this.showNotification('Cuộc gọi audio đã được kết nối', 'info');
+                    } else {
+                        audioOnlyIcon.style.display = 'none';
+                    }
+                }
+
+                // Đảm bảo video không bị mute trừ khi người dùng đã tắt âm thanh
+                remoteVideo.muted = this.isSpeakerMuted;
+
+                // Thử phát video với timeout
+                try {
+                    await Promise.race([
+                        remoteVideo.play(),
+                        new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('Timeout')), 3000)
+                        )
+                    ]);
+                    console.log('Remote video đã bắt đầu phát thành công');
+                    
                     // Ẩn thông báo "đang kết nối" khi stream đã phát được
                     document.getElementById("connectionStatus").style.display = 'none';
+                    
+                    // Log thông tin về tracks
+                    stream.getTracks().forEach(track => {
+                        console.log(`Track ${track.kind} đang hoạt động:`, {
+                            enabled: track.enabled,
+                            muted: track.muted,
+                            readyState: track.readyState
+                        });
+                    });
+                } catch (playError) {
+                    console.error('Lỗi khi phát remote video:', playError);
+                    
+                    // Thử lại một lần nữa sau 1 giây
+                    setTimeout(async () => {
+                        try {
+                            await remoteVideo.play();
+                            console.log('Remote video đã phát thành công sau khi thử lại');
+                        } catch (retryError) {
+                            console.error('Vẫn không thể phát remote video sau khi thử lại:', retryError);
+                            this.showNotification('Không thể phát video từ người dùng khác', 'warning');
+                        }
+                    }, 1000);
                 }
             } catch (error) {
-                console.error("Lỗi khi phát remote stream:", error);
+                console.error("Lỗi khi xử lý remote stream:", error);
                 this.handleCallError(error, 'handleRemoteStream');
             }
+        } else {
+            console.error("Không nhận được remote stream hoặc video element không tồn tại");
         }
     }
 
