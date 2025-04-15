@@ -832,6 +832,17 @@ class Chat {
             const stream = event.streams[0];
             
             try {
+                console.log('Xử lý remote stream:', {
+                    hasAudioTracks: stream.getAudioTracks().length,
+                    hasVideoTracks: stream.getVideoTracks().length,
+                    tracks: stream.getTracks().map(track => ({
+                        kind: track.kind,
+                        enabled: track.enabled,
+                        muted: track.muted,
+                        readyState: track.readyState
+                    }))
+                });
+
                 // Dừng stream cũ nếu có
                 if (remoteVideo.srcObject) {
                     remoteVideo.srcObject.getTracks().forEach(track => track.stop());
@@ -871,14 +882,16 @@ class Chat {
                 // Đảm bảo video không bị mute trừ khi người dùng đã tắt âm thanh
                 remoteVideo.muted = this.isSpeakerMuted;
 
-                // Thử phát video với timeout
+                // Đặt kích thước video phù hợp
+                if (hasVideoTrack) {
+                    remoteVideo.style.width = '100%';
+                    remoteVideo.style.height = '100%';
+                    remoteVideo.style.objectFit = 'contain';
+                }
+
+                // Thử phát video
                 try {
-                    await Promise.race([
-                        remoteVideo.play(),
-                        new Promise((_, reject) => 
-                            setTimeout(() => reject(new Error('Timeout')), 3000)
-                        )
-                    ]);
+                    await remoteVideo.play();
                     console.log('Remote video đã bắt đầu phát thành công');
                     
                     // Ẩn thông báo "đang kết nối" khi stream đã phát được
@@ -889,9 +902,26 @@ class Chat {
                         console.log(`Track ${track.kind} đang hoạt động:`, {
                             enabled: track.enabled,
                             muted: track.muted,
-                            readyState: track.readyState
+                            readyState: track.readyState,
+                            constraints: track.getConstraints(),
+                            settings: track.getSettings()
                         });
                     });
+
+                    // Thêm event listener để theo dõi trạng thái video
+                    if (hasVideoTrack) {
+                        const videoTrack = stream.getVideoTracks()[0];
+                        videoTrack.onended = () => {
+                            console.log('Video track đã kết thúc');
+                            this.showNotification('Video từ người dùng khác đã dừng', 'info');
+                        };
+                        videoTrack.onmute = () => {
+                            console.log('Video track đã bị mute');
+                        };
+                        videoTrack.onunmute = () => {
+                            console.log('Video track đã được unmute');
+                        };
+                    }
                 } catch (playError) {
                     console.error('Lỗi khi phát remote video:', playError);
                     
