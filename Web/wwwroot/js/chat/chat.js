@@ -804,9 +804,38 @@ class Chat {
         }
     }
 
+    async safePlay(videoElement) {
+        try {
+            // Đợi một frame animation để đảm bảo DOM đã được cập nhật
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            await videoElement.play();
+            return true;
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                // Thử lại sau 100ms nếu bị gián đoạn
+                await new Promise(resolve => setTimeout(resolve, 100));
+                try {
+                    await videoElement.play();
+                    return true;
+                } catch (retryError) {
+                    console.error('Không thể phát video sau khi thử lại:', retryError);
+                    return false;
+                }
+            }
+            console.error('Lỗi khi phát video:', error);
+            return false;
+        }
+    }
+
     async handleRemoteStream(event, remoteVideo) {
         if (remoteVideo && event.streams && event.streams[0]) {
             const stream = event.streams[0];
+            
+            // Dừng stream cũ nếu có
+            if (remoteVideo.srcObject) {
+                remoteVideo.srcObject.getTracks().forEach(track => track.stop());
+            }
+            
             remoteVideo.srcObject = stream;
             
             // Kiểm tra xem có video track không
@@ -837,11 +866,13 @@ class Chat {
             }
 
             try {
-                await remoteVideo.play();
-                console.log(`Đang phát ${hasVideoTrack ? 'video' : 'audio'} từ người dùng khác`);
-                
-                // Ẩn thông báo "đang kết nối" khi stream đã phát được
-                document.getElementById("connectionStatus").style.display = 'none';
+                // Sử dụng phương thức phát an toàn
+                const playSuccess = await this.safePlay(remoteVideo);
+                if (playSuccess) {
+                    console.log(`Đang phát ${hasVideoTrack ? 'video' : 'audio'} từ người dùng khác`);
+                    // Ẩn thông báo "đang kết nối" khi stream đã phát được
+                    document.getElementById("connectionStatus").style.display = 'none';
+                }
             } catch (error) {
                 console.error("Lỗi khi phát remote stream:", error);
                 this.handleCallError(error, 'handleRemoteStream');
