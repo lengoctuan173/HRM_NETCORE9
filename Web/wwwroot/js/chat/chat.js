@@ -689,14 +689,11 @@ class Chat {
                         ...(data.iceServers || []),
                         { urls: 'stun:stun.l.google.com:19302' },
                         { urls: 'stun:stun1.l.google.com:19302' },
-                        { urls: 'stun:stun2.l.google.com:19302' },
-                        { urls: 'stun:stun3.l.google.com:19302' },
-                        { urls: 'stun:stun4.l.google.com:19302' }
+                        { urls: 'stun:stun2.l.google.com:19302' }
                     ],
                     iceCandidatePoolSize: 10,
                     bundlePolicy: 'max-bundle',
-                    rtcpMuxPolicy: 'require',
-                    iceTransportPolicy: 'all'
+                    rtcpMuxPolicy: 'require'
                 };
                 console.log("Đã nhận cấu hình ICE servers:", configuration);
             } catch (error) {
@@ -704,98 +701,39 @@ class Chat {
                 configuration = {
                     iceServers: [
                         { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
-                        { urls: 'stun:stun2.l.google.com:19302' }
-                    ],
-                    iceCandidatePoolSize: 10,
-                    bundlePolicy: 'max-bundle',
-                    rtcpMuxPolicy: 'require'
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
                 };
             }
 
             this.peerConnection = new RTCPeerConnection(configuration);
             console.log("Khởi tạo peer connection với cấu hình:", configuration);
 
-            // Thiết lập local stream trước khi kết nối
+            // Thiết lập local stream
             const mediaStream = await this.setupMediaStream();
-            const localVideoElement = document.getElementById("localVideo");
+            
+            // Thêm transceivers cho audio và video
+            this.peerConnection.addTransceiver('audio', {
+                direction: 'sendrecv',
+                streams: [mediaStream]
+            });
+            this.peerConnection.addTransceiver('video', {
+                direction: 'sendrecv',
+                streams: [mediaStream]
+            });
 
-            // Thêm tất cả tracks vào peer connection ngay lập tức
+            // Thêm tracks vào peer connection
             mediaStream.getTracks().forEach(track => {
-                console.log("Thêm local track vào peer connection:", track.kind);
+                console.log("Thêm local track:", track.kind);
                 this.peerConnection.addTrack(track, mediaStream);
             });
 
             // Hiển thị local video
+            const localVideoElement = document.getElementById("localVideo");
             if (localVideoElement) {
                 localVideoElement.srcObject = mediaStream;
                 await this.safePlay(localVideoElement);
             }
-
-            // Lắng nghe remote tracks
-            this.peerConnection.addEventListener('track', async (event) => {
-                console.log("Nhận được remote track:", event.track.kind);
-                const [remoteStream] = event.streams;
-                
-                if (!remoteStream) {
-                    console.error("Không có remote stream trong track event");
-                    return;
-                }
-
-                const remoteVideo = document.getElementById("remoteVideo");
-                if (remoteVideo) {
-                    // Lưu stream ID để kiểm tra sau này
-                    remoteVideo.dataset.streamId = remoteStream.id;
-                    
-                    // Nếu đã có stream, chỉ cập nhật nếu là stream mới
-                    if (remoteVideo.srcObject && remoteVideo.srcObject.id === remoteStream.id) {
-                        console.log("Stream đã tồn tại, bỏ qua");
-                        return;
-                    }
-
-                    console.log("Cập nhật remote stream mới:", {
-                        streamId: remoteStream.id,
-                        tracks: remoteStream.getTracks().map(t => ({
-                            kind: t.kind,
-                            enabled: t.enabled,
-                            muted: t.muted
-                        }))
-                    });
-
-                    remoteVideo.srcObject = remoteStream;
-                    
-                    // Cập nhật UI dựa trên loại tracks
-                    const hasVideo = remoteStream.getVideoTracks().length > 0;
-                    const hasAudio = remoteStream.getAudioTracks().length > 0;
-                    
-                    this.updateRemoteVideoUI(hasVideo);
-                    this.updateRemoteAudioUI(hasAudio);
-
-                    // Theo dõi các thay đổi trong stream
-                    remoteStream.onaddtrack = (e) => {
-                        console.log("Track mới được thêm vào remote stream:", e.track.kind);
-                    };
-                    
-                    remoteStream.onremovetrack = (e) => {
-                        console.log("Track bị xóa khỏi remote stream:", e.track.kind);
-                        // Kiểm tra lại số lượng tracks
-                        const remainingVideoTracks = remoteStream.getVideoTracks().length;
-                        const remainingAudioTracks = remoteStream.getAudioTracks().length;
-                        this.updateRemoteVideoUI(remainingVideoTracks > 0);
-                        this.updateRemoteAudioUI(remainingAudioTracks > 0);
-                    };
-
-                    try {
-                        await remoteVideo.play();
-                        console.log("Remote video đã bắt đầu phát");
-                    } catch (error) {
-                        console.warn("Không thể tự động phát video:", error);
-                        if (error.name === 'NotAllowedError') {
-                            this.showNotification('Vui lòng cho phép tự động phát video', 'warning');
-                        }
-                    }
-                }
-            });
 
             // Lắng nghe sự kiện ICE candidate
             this.peerConnection.addEventListener('icecandidate', async event => {
@@ -808,23 +746,43 @@ class Chat {
             // Lắng nghe sự kiện kết nối thay đổi
             this.peerConnection.addEventListener('connectionstatechange', async event => {
                 console.log("Connection state changed:", this.peerConnection.connectionState);
-                switch (this.peerConnection.connectionState) {
-                    case 'connected':
-                        console.log("Peers connected successfully!");
-                        this.showNotification('Kết nối thành công!', 'success');
-                        document.getElementById("connectionStatus").style.display = 'none';
-                        break;
-                    case 'disconnected':
-                    case 'failed':
-                        console.log("Peer connection failed or disconnected");
-                        this.showNotification('Kết nối bị gián đoạn', 'error');
-                        // Thử kết nối lại trước khi kết thúc
-                        if (this.currentCallState === CallState.IN_CALL) {
-                            this.tryReconnect(senderId);
-                        } else {
-                            this.endCall();
+                if (this.peerConnection.connectionState === 'connected') {
+                    console.log("Peers connected successfully!");
+                    this.showNotification('Kết nối thành công!', 'success');
+                    document.getElementById("connectionStatus").style.display = 'none';
+                }
+            });
+
+            // Lắng nghe remote tracks
+            this.peerConnection.addEventListener('track', async (event) => {
+                console.log("Nhận được remote track:", event.track.kind);
+                const remoteVideo = document.getElementById("remoteVideo");
+                if (remoteVideo) {
+                    const [remoteStream] = event.streams;
+                    if (!remoteStream) {
+                        console.error("Không có remote stream trong track event");
+                        return;
+                    }
+
+                    console.log("Thiết lập remote stream:", {
+                        id: remoteStream.id,
+                        tracks: remoteStream.getTracks().map(t => ({
+                            kind: t.kind,
+                            enabled: t.enabled,
+                            muted: t.muted
+                        }))
+                    });
+
+                    remoteVideo.srcObject = remoteStream;
+                    try {
+                        await remoteVideo.play();
+                        console.log("Remote video đã bắt đầu phát");
+                    } catch (error) {
+                        console.error("Lỗi khi phát remote video:", error);
+                        if (error.name === 'NotAllowedError') {
+                            this.showNotification('Vui lòng cho phép tự động phát video', 'warning');
                         }
-                        break;
+                    }
                 }
             });
 
@@ -1196,14 +1154,11 @@ class Chat {
                         ...(data.iceServers || []),
                         { urls: 'stun:stun.l.google.com:19302' },
                         { urls: 'stun:stun1.l.google.com:19302' },
-                        { urls: 'stun:stun2.l.google.com:19302' },
-                        { urls: 'stun:stun3.l.google.com:19302' },
-                        { urls: 'stun:stun4.l.google.com:19302' }
+                        { urls: 'stun:stun2.l.google.com:19302' }
                     ],
                     iceCandidatePoolSize: 10,
                     bundlePolicy: 'max-bundle',
-                    rtcpMuxPolicy: 'require',
-                    iceTransportPolicy: 'all'
+                    rtcpMuxPolicy: 'require'
                 };
                 console.log("Đã nhận cấu hình ICE servers:", configuration);
             } catch (error) {
@@ -1211,12 +1166,8 @@ class Chat {
                 configuration = {
                     iceServers: [
                         { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
-                        { urls: 'stun:stun2.l.google.com:19302' }
-                    ],
-                    iceCandidatePoolSize: 10,
-                    bundlePolicy: 'max-bundle',
-                    rtcpMuxPolicy: 'require'
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
                 };
             }
 
@@ -1268,11 +1219,35 @@ class Chat {
             });
 
             // Lắng nghe remote tracks
-            this.peerConnection.addEventListener('track', async event => {
+            this.peerConnection.addEventListener('track', async (event) => {
                 console.log("Nhận được remote track:", event.track.kind);
                 const remoteVideo = document.getElementById("remoteVideo");
                 if (remoteVideo) {
-                    await this.handleRemoteStream(event, remoteVideo);
+                    const [remoteStream] = event.streams;
+                    if (!remoteStream) {
+                        console.error("Không có remote stream trong track event");
+                        return;
+                    }
+
+                    console.log("Thiết lập remote stream:", {
+                        id: remoteStream.id,
+                        tracks: remoteStream.getTracks().map(t => ({
+                            kind: t.kind,
+                            enabled: t.enabled,
+                            muted: t.muted
+                        }))
+                    });
+
+                    remoteVideo.srcObject = remoteStream;
+                    try {
+                        await remoteVideo.play();
+                        console.log("Remote video đã bắt đầu phát");
+                    } catch (error) {
+                        console.error("Lỗi khi phát remote video:", error);
+                        if (error.name === 'NotAllowedError') {
+                            this.showNotification('Vui lòng cho phép tự động phát video', 'warning');
+                        }
+                    }
                 }
             });
 
