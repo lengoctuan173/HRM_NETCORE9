@@ -976,16 +976,34 @@ class Chat {
                 console.error("No TURN server found in configuration!");
             }
 
-            // Thêm Google STUN server dự phòng
-            const iceServers = [
-                ...data.iceServers,
-                {
-                    urls: [
-                        'stun:stun.l.google.com:19302',
-                        'stun:stun1.l.google.com:19302'
-                    ]
+            // Thêm Google STUN server dự phòng và cấu hình TURN
+            const iceServers = data.iceServers.map(server => {
+                if (server.urls.some(url => url.startsWith('turn:'))) {
+                    return {
+                        ...server,
+                        urls: server.urls.map(url => {
+                            // Thêm các transport options cho TURN
+                            if (url.startsWith('turn:') && !url.includes('?transport=')) {
+                                return [
+                                    `${url}?transport=udp`,
+                                    `${url}?transport=tcp`
+                                ];
+                            }
+                            return url;
+                        }).flat()
+                    };
                 }
-            ];
+                return server;
+            });
+
+            // Thêm public STUN servers
+            iceServers.push({
+                urls: [
+                    'stun:stun.l.google.com:19302',
+                    'stun:stun1.l.google.com:19302',
+                    'stun:stun2.l.google.com:19302'
+                ]
+            });
 
             this.configuration = {
                 iceServers,
@@ -993,7 +1011,12 @@ class Chat {
                 bundlePolicy: 'max-bundle',
                 rtcpMuxPolicy: 'require',
                 iceTransportPolicy: 'relay',
-                sdpSemantics: 'unified-plan'
+                sdpSemantics: 'unified-plan',
+                // Thêm các cấu hình bổ sung
+                iceServers: iceServers.map(server => ({
+                    ...server,
+                    credentialType: 'password'
+                }))
             };
             
             console.log("WebRTC configuration:", {
@@ -1018,6 +1041,89 @@ class Chat {
 
         console.log("Initializing peer connection...");
         this.peerConnection = new RTCPeerConnection(this.configuration);
+
+        // Xử lý remote stream
+        this.peerConnection.ontrack = (event) => {
+            console.log("Receiver got remote track:", event.track.kind);
+            const remoteVideo = document.getElementById("remoteVideo");
+            if (remoteVideo) {
+                console.log("Setting up remote stream for receiver");
+                remoteVideo.srcObject = event.streams[0];
+                this.remoteStream = event.streams[0];
+
+                const videoTracks = event.streams[0].getVideoTracks();
+                const audioTracks = event.streams[0].getAudioTracks();
+                console.log("Remote tracks:", {
+                    video: videoTracks.length,
+                    audio: audioTracks.length,
+                    videoEnabled: videoTracks.length > 0 ? videoTracks[0].enabled : false,
+                    audioEnabled: audioTracks.length > 0 ? audioTracks[0].enabled : false
+                });
+
+                if (event.track.kind === 'video') {
+                    console.log("Received video track, enabling video display");
+                    remoteVideo.style.display = "block";
+                    
+                    // Đảm bảo video container hiển thị
+                    const videoContainer = document.getElementById("loadVideo");
+                    if (videoContainer) {
+                        videoContainer.classList.remove('d-none');
+                    }
+
+                    // Xử lý video playback
+                    remoteVideo.onloadedmetadata = () => {
+                        console.log("Remote video metadata loaded");
+                        remoteVideo.play()
+                            .then(() => {
+                                console.log("Remote video playing successfully");
+                                remoteVideo.style.display = "block";
+                            })
+                            .catch(e => {
+                                console.error("Error playing remote video:", e);
+                                // Thử play lại sau 1 giây
+                                setTimeout(() => {
+                                    remoteVideo.play()
+                                        .then(() => console.log("Retry playing successful"))
+                                        .catch(e => console.error("Retry failed:", e));
+                                }, 1000);
+                            });
+                    };
+                }
+
+                // Track event handlers với retry logic
+                event.track.onmute = () => {
+                    console.log(`Remote ${event.track.kind} track muted`);
+                    if (event.track.kind === 'video') {
+                        // Thử unmute track
+                        setTimeout(() => {
+                            if (event.track.muted) {
+                                console.log("Attempting to unmute video track");
+                                event.track.enabled = true;
+                            }
+                        }, 1000);
+                    }
+                };
+
+                event.track.onunmute = () => {
+                    console.log(`Remote ${event.track.kind} track unmuted`);
+                    if (event.track.kind === 'video') {
+                        remoteVideo.style.display = "block";
+                    }
+                };
+
+                // Monitor track status
+                setInterval(() => {
+                    if (this.remoteStream) {
+                        const vTracks = this.remoteStream.getVideoTracks();
+                        const aTracks = this.remoteStream.getAudioTracks();
+                        console.log("Track status:", {
+                            video: vTracks.map(t => ({enabled: t.enabled, muted: t.muted})),
+                            audio: aTracks.map(t => ({enabled: t.enabled, muted: t.muted}))
+                        });
+                    }
+                }, 5000);
+            }
+        };
 
         // Track ICE gathering timeout - increased to 20 seconds
         this.iceGatheringTimeout = setTimeout(() => {
