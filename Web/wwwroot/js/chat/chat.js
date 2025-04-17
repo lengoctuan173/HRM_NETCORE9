@@ -963,21 +963,47 @@ class Chat {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             const data = await response.json();
-            console.log("Received Twilio configuration:", {
-                iceServers: data.iceServers.length,
-                urls: data.iceServers.map(server => server.urls)
-            });
             
-            // Force using TURN
+            // Log chi tiết về TURN servers
+            console.log("Raw Twilio configuration:", data);
+            
+            // Đảm bảo có ít nhất một TURN server
+            const hasTurnServer = data.iceServers.some(server => 
+                server.urls.some(url => url.startsWith('turn:'))
+            );
+            
+            if (!hasTurnServer) {
+                console.error("No TURN server found in configuration!");
+            }
+
+            // Thêm Google STUN server dự phòng
+            const iceServers = [
+                ...data.iceServers,
+                {
+                    urls: [
+                        'stun:stun.l.google.com:19302',
+                        'stun:stun1.l.google.com:19302'
+                    ]
+                }
+            ];
+
             this.configuration = {
-                iceServers: data.iceServers,
+                iceServers,
                 iceCandidatePoolSize: 10,
                 bundlePolicy: 'max-bundle',
                 rtcpMuxPolicy: 'require',
-                iceTransportPolicy: 'relay' // Force TURN
+                iceTransportPolicy: 'relay',
+                sdpSemantics: 'unified-plan'
             };
             
-            console.log("WebRTC configuration set:", this.configuration);
+            console.log("WebRTC configuration:", {
+                iceServers: this.configuration.iceServers.map(server => ({
+                    urls: server.urls,
+                    hasCreds: !!(server.username && server.credential)
+                })),
+                iceTransportPolicy: this.configuration.iceTransportPolicy
+            });
+            
             return true;
         } catch (error) {
             console.error("Error getting Twilio token:", error);
@@ -990,170 +1016,147 @@ class Chat {
             this.peerConnection.close();
         }
 
-        console.log("Initializing peer connection with config:", this.configuration);
+        console.log("Initializing peer connection...");
         this.peerConnection = new RTCPeerConnection(this.configuration);
 
-        // Track ICE gathering timeout
+        // Track ICE gathering timeout - increased to 20 seconds
         this.iceGatheringTimeout = setTimeout(() => {
             if (this.peerConnection && this.peerConnection.iceGatheringState !== 'complete') {
-                console.warn("ICE gathering timed out - proceeding with available candidates");
-                // Proceed with available candidates
-                if (this._iceCandidates.length > 0) {
-                    console.log("Proceeding with", this._iceCandidates.length, "candidates");
-                } else {
-                    console.error("No ICE candidates gathered before timeout");
+                console.warn("ICE gathering timed out after 20 seconds");
+                if (this._iceCandidates.length === 0) {
+                    // Thử kết nối lại với cấu hình mới
+                    this.configuration.iceTransportPolicy = 'all';
+                    console.log("Retrying with all transport policies");
+                    this.tryReconnect();
                 }
             }
-        }, 10000); // 10 second timeout
+        }, 20000);
 
         // Track ICE candidates
         this._iceCandidates = [];
         this.peerConnection.onicecandidate = (event) => {
             if (event.candidate) {
+                const candidate = event.candidate;
                 console.log("New ICE candidate:", {
-                    type: event.candidate.type,
-                    protocol: event.candidate.protocol,
-                    address: event.candidate.address,
-                    port: event.candidate.port,
-                    candidate: event.candidate.candidate // Log the full candidate string
+                    type: candidate.type,
+                    protocol: candidate.protocol,
+                    address: candidate.address,
+                    port: candidate.port,
+                    relatedAddress: candidate.relatedAddress,
+                    relatedPort: candidate.relatedPort,
+                    usernameFragment: candidate.usernameFragment,
+                    foundation: candidate.foundation,
+                    raw: candidate.candidate
                 });
-                this._iceCandidates.push(event.candidate);
 
-                // Send the candidate immediately
+                this._iceCandidates.push(candidate);
+
+                // Gửi candidate ngay lập tức
                 const receiverId = document.getElementById("selectedUser").value;
                 this.sendCallSignal(receiverId, "ice-candidate", {
                     callId: this.currentCallId,
-                    candidate: event.candidate
+                    candidate: candidate
                 });
             } else {
-                console.log("Finished gathering ICE candidates:", this._iceCandidates.length, "candidates gathered");
-            }
-        };
-
-        // Log ICE gathering state
-        this.peerConnection.onicegatheringstatechange = () => {
-            console.log("ICE gathering state changed to:", this.peerConnection.iceGatheringState);
-            
-            if (this.peerConnection.iceGatheringState === 'gathering') {
-                console.log("Starting to gather ICE candidates...");
-                // Reset candidates array
-                this._iceCandidates = [];
-            }
-            
-            if (this.peerConnection.iceGatheringState === 'complete') {
-                console.log("✅ ICE gathering completed");
-                console.log("Final ICE candidates:", this._iceCandidates.map(c => ({
-                    type: c.type,
-                    protocol: c.protocol,
-                    address: c.address,
-                    port: c.port
-                })));
-                
-                if (this.iceGatheringTimeout) {
-                    clearTimeout(this.iceGatheringTimeout);
-                }
-
-                // If no candidates were gathered, try forcing TURN
+                console.log("ICE gathering finished");
                 if (this._iceCandidates.length === 0) {
-                    console.warn("No ICE candidates gathered - attempting to force TURN usage");
-                    this.configuration.iceTransportPolicy = 'relay';
-                    this.tryReconnect();
+                    console.warn("No ICE candidates were gathered!");
+                } else {
+                    console.log(`Gathered ${this._iceCandidates.length} ICE candidates`);
                 }
             }
         };
 
-        // Log ICE connection state
-        this.peerConnection.oniceconnectionstatechange = () => {
-            const state = this.peerConnection.iceConnectionState;
-            console.log("ICE connection state changed to:", state);
+        // Log ICE gathering state changes
+        this.peerConnection.onicegatheringstatechange = () => {
+            const state = this.peerConnection.iceGatheringState;
+            console.log("ICE gathering state:", state);
             
-            switch (state) {
-                case "checking":
-                    console.log("🔄 Checking ICE connection...");
-                    this.showNotification("Đang thiết lập kết nối...", "info");
-                    break;
-                case "connected":
-                    console.log("✅ ICE connection established");
-                    console.log("Active ICE candidates:", this._iceCandidates.length);
-                    
-                    // Ensure video display
-                    const videoContainer = document.getElementById("loadVideo");
-                    const remoteVideo = document.getElementById("remoteVideo");
-                    
-                    if (videoContainer) {
-                        videoContainer.classList.remove('d-none');
-                        console.log("Video container displayed");
-                    }
-                    
-                    if (remoteVideo && this.remoteStream) {
-                        const videoTracks = this.remoteStream.getVideoTracks();
-                        console.log("Remote video tracks:", videoTracks.length);
-                        
-                        if (videoTracks.length > 0) {
-                            remoteVideo.style.display = "block";
-                            remoteVideo.play().catch(e => console.error("Error playing remote video:", e));
-                            console.log("Remote video display enabled");
-                        }
-                    }
-                    break;
-                case "failed":
-                    console.error("❌ ICE connection failed - Details:", {
-                        iceGatheringState: this.peerConnection.iceGatheringState,
-                        signalingState: this.peerConnection.signalingState,
-                        connectionState: this.peerConnection.connectionState,
-                        candidatesGathered: this._iceCandidates.length
-                    });
-                    
-                    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-                        console.log(`Attempting reconnection ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts}`);
-                        // Force TURN on reconnect
-                        this.configuration.iceTransportPolicy = 'relay';
-                        this.tryReconnect();
-                    } else {
-                        this.handleCallError(new Error("ICE connection failed after max attempts"), "iceConnection");
-                        this.endCall();
-                    }
-                    break;
-                case "disconnected":
-                    console.warn("⚠️ ICE connection disconnected - attempting recovery");
-                    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-                        this.tryReconnect();
-                    }
-                    break;
+            if (state === 'gathering') {
+                console.log("Starting ICE gathering process...");
+                this._iceCandidates = [];
+            } else if (state === 'complete') {
+                console.log("ICE gathering completed");
+                console.log("Candidates by type:", this._iceCandidates.reduce((acc, candidate) => {
+                    acc[candidate.type] = (acc[candidate.type] || 0) + 1;
+                    return acc;
+                }, {}));
+                
+                if (this._iceCandidates.length === 0) {
+                    console.warn("No candidates gathered - possible network or TURN server issue");
+                    // Kiểm tra kết nối mạng
+                    this.checkConnectivity();
+                }
             }
+        };
+
+        // Monitor connection state changes
+        this.peerConnection.onconnectionstatechange = () => {
+            console.log("Connection state:", this.peerConnection.connectionState);
+            this.handleConnectionStateChange();
         };
 
         return this.peerConnection;
     }
 
-    async tryReconnect() {
-        this.reconnectAttempts++;
-        //// console.log(`Đang thử kết nối lại (lần ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
-
-        if (this.peerConnection && this.callState === 'inCall') {
-            try {
-                const offer = await this.peerConnection.createOffer({
-                    iceRestart: true,
-                    offerToReceiveAudio: true,
-                    offerToReceiveVideo: true
+    async checkConnectivity() {
+        try {
+            // Kiểm tra kết nối internet
+            const response = await fetch('https://8.8.8.8', { mode: 'no-cors' });
+            console.log("Internet connection available");
+            
+            // Kiểm tra TURN server
+            const turnConfig = this.configuration.iceServers.find(server => 
+                server.urls.some(url => url.startsWith('turn:'))
+            );
+            
+            if (turnConfig) {
+                console.log("Testing TURN server connectivity...");
+                // Log thông tin TURN server (không log credentials)
+                console.log("TURN server:", {
+                    urls: turnConfig.urls,
+                    hasCredentials: !!(turnConfig.username && turnConfig.credential)
                 });
+            } else {
+                console.error("No TURN server configured!");
+            }
+        } catch (error) {
+            console.error("Network connectivity test failed:", error);
+        }
+    }
 
-                await this.peerConnection.setLocalDescription(offer);
-                
-                const receiverId = document.getElementById("selectedUser").value;
-                await this.sendCallSignal(receiverId, "offer", {
-                    callId: this.currentCallId,
-                    offer: offer
+    handleConnectionStateChange() {
+        const state = this.peerConnection.connectionState;
+        const iceState = this.peerConnection.iceConnectionState;
+        const gatheringState = this.peerConnection.iceGatheringState;
+
+        console.log("Connection state change:", {
+            connectionState: state,
+            iceConnectionState: iceState,
+            iceGatheringState: gatheringState,
+            candidatesGathered: this._iceCandidates.length
+        });
+
+        switch (state) {
+            case 'connecting':
+                console.log("Attempting to establish connection...");
+                break;
+            case 'connected':
+                console.log("Connection established successfully");
+                this.showNotification("Kết nối thành công", "success");
+                break;
+            case 'disconnected':
+            case 'failed':
+                console.error("Connection failed:", {
+                    lastError: this.peerConnection.getLastError,
+                    iceState: iceState
                 });
-
-                //// console.log("Đã gửi offer mới để thử kết nối lại");
-            } catch (error) {
-                //// console.error("Lỗi khi thử kết nối lại:", error);
-                if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-                    this.showNotification("Không thể thiết lập lại kết nối", "error");
+                if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                    this.tryReconnect();
+                } else {
                     this.endCall();
                 }
-            }
+                break;
         }
     }
 
