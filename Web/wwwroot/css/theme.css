@@ -16,7 +16,7 @@
 /**
     For Libs
 */
-@import url('../content/libs/toastr/toastr.css');
+@import url('../css/chat/toastr.css');
 @import url('../content/libs/datatables/datatables.min.css');
 @import url('../content/libs/bootstrap-table/dist/bootstrap-table.min.css');
 @import url('../css/picker/pickadate.css');

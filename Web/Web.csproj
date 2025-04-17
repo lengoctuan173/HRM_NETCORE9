@@ -44,6 +44,7 @@
     <Folder Include="wwwroot\content\libs\" />
     <Folder Include="wwwroot\content\sounds\" />
     <Folder Include="wwwroot\content\theme\gull\" />
+    <Folder Include="wwwroot\lib\toastr\" />
     <Folder Include="wwwroot\uploads\" />
   </ItemGroup>
 

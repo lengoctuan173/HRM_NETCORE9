@@ -1,42 +1,36 @@
 ﻿"use strict";
-
-// Thêm enum CallState ở đầu file
-const CallState = {
-    IDLE: 'idle',
-    CALLING: 'calling',
-    IN_CALL: 'in_call',
-    ENDING: 'ending'
-};
-
 class Chat {
     constructor() {
         this.connection = new signalR.HubConnectionBuilder()
             .withUrl("/chatHub")
-            .withAutomaticReconnect([0, 2000, 5000, 10000, 30000]) // Thêm automatic reconnect với thời gian tăng dần
+            .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
             .build();
-        this.currentCallState = CallState.IDLE;
-        this.currentCallerId = null;
         this.selectedGroupId = null;
         this.currentChatType = 'direct';
-        this.callAccepted = false;
         this.peerConnection = null;
-        this.isMicMuted = false;
-        this.isSpeakerMuted = false;
-        this.callDuration = 0;
-        this.callTimer = null;
-        this.incomingCallTimeout = null;
+        this.localStream = null;
+        this.remoteStream = null;
+        this.configuration = null; // Will be set after getting Twilio token
+        this.hasCamera = false;
+        this.hasMicrophone = false;
+        this.isAudioOnly = false;
+        this.callState = 'idle'; // idle, calling, inCall, ending
+        this.currentCallId = null;
+        this.callTimeout = null;
+        this.iceGatheringTimeout = null;
         this.reconnectAttempts = 0;
-        this.MAX_RECONNECT_ATTEMPTS = 5; // Tăng số lần thử kết nối lại
-        this.CALL_TIMEOUT = 60000; // Tăng timeout lên 60 giây
-        this.CONNECTION_TIMEOUT = 15000; // Timeout cho việc thiết lập kết nối
-        this.pendingCandidates = [];
-        this.lastConnectionState = null;
-        this.connectionCheckInterval = null;
-
+        this.maxReconnectAttempts = 3;
+        this.incomingCallTimeout = null;
+        this.countdownInterval = null;
+        this.remoteDescription = null;
+        this.remoteUserId = null;
+        this.isReceivingCall = false;
+        this.callType = null;
         this.initEvents();
         this.startConnection();
+        this.checkMediaDevices();
     }
-
+  
     initEvents() {
         this.initSignalREvents();
         this.initUIEvents();
@@ -99,7 +93,7 @@ class Chat {
             try {
                 this.startCall(receiverId);
             } catch (error) {
-                console.error("Lỗi khi bắt đầu cuộc gọi:", error);
+                // console.error("Lỗi khi bắt đầu cuộc gọi:", error);
                 this.handleCallError(error, 'startCall');
             }
         });
@@ -113,7 +107,7 @@ class Chat {
         // Xử lý sự kiện click nút tắt/bật loa
         document.getElementById("toggleSpeakerButton").addEventListener("click", () => this.toggleSpeaker());
     }
-
+    //#region Chat
     initSidebarEvents() {
         document.querySelectorAll('[data-sidebar-toggle="chat"]').forEach(button => {
             button.addEventListener('click', () => this.toggleSidebar());
@@ -123,49 +117,22 @@ class Chat {
     initGroupEvents() {
         // Xử lý sự kiện click nút tạo nhóm
         document.getElementById("createGroupBtn").addEventListener("click", () => {
-            console.log('Nút tạo nhóm được click');
-
-            // Lấy danh sách người dùng để chọn thành viên
-            let allUsers = [];
-            document.querySelectorAll('.contacts-scrollable .contact').forEach(contact => {
-                let userId = contact.getAttribute('data-userid');
-                let userName = contact.querySelector('h6').textContent;
-
-                // Không thêm user hiện tại vào danh sách
-                if (userId !== document.getElementById('currentUser').value) {
-                    allUsers.push({
-                        id: userId,
-                        name: userName
-                    });
-                }
-            });
-
-            // Tạo danh sách checkbox cho từng user
-            let memberListHtml = '';
-            allUsers.forEach(user => {
-                memberListHtml += `
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" value="${user.id}" id="member${user.id}">
-                        <label class="form-check-label" for="member${user.id}">
-                            ${user.name}
-                        </label>
-                    </div>
-                `;
-            });
-
-            // Cập nhật nội dung modal
-            document.querySelector('.member-list').innerHTML = memberListHtml;
-            //// Hiển thị modal
             this.showModalGroup();
-
         });
+
+        // Xử lý sự kiện click nút submit tạo nhóm
+        document.getElementById("createGroupSubmit").addEventListener("click", (e) => {
+            this.createGroupSubmit(e);
+        });
+
         // Xử lý sự kiện click nút thông tin nhóm
         document.querySelector(".groupInfoButton").addEventListener("click", () => this.showGroupInfo());
     }
 
     initContactListEvents() {
         document.addEventListener("click", (event) => {
-            const contactTarget = event.target.closest(".contact");
+            // Xử lý click vào contact cá nhân
+            const contactTarget = event.target.closest(".contact:not(.group)");
             if (contactTarget) {
                 const userId = contactTarget.getAttribute("data-userid");
                 const userName = contactTarget.getAttribute("data-username");
@@ -173,6 +140,17 @@ class Chat {
 
                 if (userId && userName) {
                     this.selectContact(userId, userName, userImage);
+                }
+            }
+
+            // Xử lý click vào nhóm chat
+            const groupTarget = event.target.closest(".contact.group");
+            if (groupTarget) {
+                const groupId = groupTarget.getAttribute("data-groupid");
+                const groupName = groupTarget.getAttribute("data-groupname");
+
+                if (groupId && groupName) {
+                    this.selectGroup(groupId, groupName);
                 }
             }
         });
@@ -211,26 +189,192 @@ class Chat {
         document.querySelector(".startCallButton").style.display = "flex";
         document.querySelector(".groupInfoButton").style.display = "none";
 
-        // Xóa và focus vào ô nhập tin nhắn
-        document.getElementById("messageInput").value = "";
-        document.getElementById("messageInput").focus();
+        // Xóa tin nhắn cũ
         document.querySelector(".chat-content").innerHTML = "";
+
+        // Mở khung chat và focus vào ô nhập tin nhắn
+        this.openChatInterface();
 
         // Tải tin nhắn cũ
         let currentUser = document.getElementById("currentUser").value;
         this.connection.invoke("LoadOldMessages", currentUser, userId)
             .catch(function (err) {
-                console.error("Lỗi khi tải tin nhắn cũ:", err.toString());
+                //// console.error("Lỗi khi tải tin nhắn cũ:", err.toString());
             });
     }
 
+    selectGroup(groupId, groupName) {
+        this.currentChatType = 'group';
+        document.getElementById("chatType").value = 'group';
+        this.selectedGroupId = groupId;
+        document.getElementById("selectedGroup").value = groupId;
+
+        // Cập nhật thông tin nhóm được chọn
+        const selectedUserInfo = document.querySelector(".selected-user-info");
+        if (selectedUserInfo) {
+            selectedUserInfo.querySelector(".selected-user-name").textContent = groupName;
+            selectedUserInfo.querySelector(".user-status").textContent = "Nhóm chat";
+        }
+
+        // Cập nhật avatar nhóm
+        const selectedUserAvatarImg = document.getElementById("selectedUserAvatar");
+        if (selectedUserAvatarImg) {
+            selectedUserAvatarImg.src = "/content/images/avatar/group-avatar.png";
+            selectedUserAvatarImg.classList.remove("d-none");
+        }
+
+        // Ẩn nút gọi điện, hiện nút thông tin nhóm
+        document.querySelector(".startCallButton").style.display = "none";
+        document.querySelector(".groupInfoButton").style.display = "flex";
+
+        // Xóa tin nhắn cũ
+        document.querySelector(".chat-content").innerHTML = "";
+
+        // Mở khung chat và focus vào ô nhập tin nhắn
+        this.openChatInterface();
+
+        // Tải tin nhắn cũ của nhóm
+        this.connection.invoke("LoadGroupMessages", groupId)
+            .catch(function (err) {
+                console.error("Lỗi khi tải tin nhắn nhóm:", err.toString());
+            });
+    }
+
+    openChatInterface() {
+        // Đóng sidebar trên mobile (nếu đang mở)
+        const sidebar = document.querySelector('.chat-sidebar-wrap');
+        const overlay = document.querySelector('.sidebar-overlay');
+        if (sidebar && sidebar.classList.contains('show')) {
+            sidebar.classList.remove('show');
+            if (overlay) overlay.classList.remove('show');
+        }
+
+        // Hiển thị khung chat chính
+        const chatMain = document.querySelector('.chat-content-wrap');
+        if (chatMain) {
+            chatMain.classList.add('show');
+        }
+
+        // Focus vào ô nhập tin nhắn
+        const messageInput = document.getElementById("messageInput");
+        const inputForm = document.querySelector(".inputForm");
+        if (inputForm) {
+            inputForm.classList.remove('d-none');
+            messageInput.value = "";
+            messageInput.focus();
+        }
+    }
+
+    createMessageElement(messageObj, isCurrentUser, isFileMessage = false) {
+        let messageDiv = document.createElement("div");
+        messageDiv.classList.add("d-flex", "mb-4", isCurrentUser && "user");
+
+        let selectedUserId = document.getElementById("selectedUser").value; // Người đang chat
+        let currentUserId = document.getElementById("currentUser").value;  // User hiện tại
+
+        let isMessageForCurrentChat =
+            (messageObj.senderId === currentUserId && messageObj.receiverId === selectedUserId) ||
+            (messageObj.receiverId === currentUserId && messageObj.senderId === selectedUserId);
+
+        if (!isMessageForCurrentChat) {
+            console.warn("🚨 Tin nhắn không phải dành cho cuộc trò chuyện này, bỏ qua.");
+            return null;
+        }
+        // Kiểm tra xem có file trong tin nhắn hay không
+        isFileMessage = messageObj.filePath ? true : isFileMessage;
+        //let avatar = isCurrentUser
+        //    ? ``
+        //    : `<img class="avatar-sm rounded-circle me-3" src="/content/images/avatar/${messageObj.senderImage}" alt="User Avatar">`;
+        let avatar = `<img class="avatar-sm rounded-circle me-3" src="${messageObj.senderImage?.startsWith("http") ? messageObj.senderImage : `/content/images/avatar/${messageObj.senderImage}`}" alt="User Avatar">`;
+
+        let messageContent = isFileMessage
+            ? `📎 <a href="/uploads/${messageObj.filePath}" target="_blank">Tải file</a>`
+            : messageObj.content;
+        // Tạo HTML cho tin nhắn
+        if (isCurrentUser) {
+            messageDiv.innerHTML = `
+                <div class="message flex-grow-1">
+                    <div class="d-flex">
+                        <p class="mb-1 text-title text-16 flex-grow-1">${messageObj.senderName}</p>
+                        <span class="text-small text-muted">${messageObj.timestamp}</span>
+                     </div>
+                    <p class="m-0">${messageContent}</p>
+                 </div>
+                ${avatar}
+            `;
+        } else {
+            messageDiv.innerHTML = `
+                ${avatar}
+                <div class="message flex-grow-1">
+                    <div class="d-flex">
+                        <p class="mb-1 text-title text-16 flex-grow-1">${messageObj.senderName}</p>
+                        <span class="text-small text-muted">${messageObj.timestamp}</span>
+                     </div>
+                    <p class="m-0">${messageContent}</p>
+                 </div>
+            `;
+        }
+        return messageDiv;
+    }
+    createGroupMessageElement(messageObj, isCurrentUser, isFileMessage = false) {
+        let messageDiv = document.createElement("div");
+        messageDiv.classList.add("d-flex", "mb-4");
+        if (isCurrentUser) {
+            messageDiv.classList.add("user");
+        }
+
+        // Kiểm tra xem có file trong tin nhắn hay không
+        isFileMessage = messageObj.filePath ? true : isFileMessage;
+
+        // Xử lý ảnh đại diện
+        let senderImage = messageObj.senderImage || "/content/images/avatar/default-avatar.jpg";
+        let avatar = `<img class="avatar-sm rounded-circle me-3" src="${messageObj.senderImage?.startsWith("http") ? messageObj.senderImage : `/content/images/avatar/${messageObj.senderImage}`}" alt="User Avatar">`;
+
+        // Xử lý nội dung tin nhắn
+        let messageContent = "";
+        if (isFileMessage && messageObj.filePath) {
+            messageContent = `📎 <a href="/uploads/${messageObj.filePath}" target="_blank">Tải file</a>`;
+        } else {
+            messageContent = messageObj.content || messageObj.message || "";
+        }
+
+        // Xử lý thời gian
+        let timestamp = messageObj.timestamp || new Date().toLocaleString();
+
+        // Tạo HTML cho tin nhắn
+        if (isCurrentUser) {
+            messageDiv.innerHTML = `
+                <div class="message flex-grow-1">
+                    <div class="d-flex">
+                        <p class="mb-1 text-title text-16 flex-grow-1">${messageObj.senderName}</p>
+                        <span class="text-small text-muted">${messageObj.timestamp}</span>
+                     </div>
+                    <p class="m-0">${messageContent}</p>
+                 </div>
+                ${avatar}
+            `;
+        } else {
+            messageDiv.innerHTML = `
+                ${avatar}
+                <div class="message flex-grow-1">
+                    <div class="d-flex">
+                        <p class="mb-1 text-title text-16 flex-grow-1">${messageObj.senderName}</p>
+                        <span class="text-small text-muted">${messageObj.timestamp}</span>
+                     </div>
+                    <p class="m-0">${messageContent}</p>
+                 </div>
+            `;
+        }
+
+        return messageDiv;
+    }
     startConnection() {
         this.connection.start()
             .then(() => {
-                console.log("✅ Kết nối SignalR thành công!");
+               // // console.log("✅ Kết nối SignalR thành công!");
             })
             .catch(function (err) {
-                console.error("❌ Lỗi kết nối SignalR: ", err.toString());
+               // // console.error("❌ Lỗi kết nối SignalR: ", err.toString());
             });
     }
 
@@ -246,12 +390,12 @@ class Chat {
     }
 
     handleUpdateUserList(allUsers, onlineUsers) {
-        console.log("Nhận danh sách người dùng:", { allUsers, onlineUsers });
+       // // console.log("Nhận danh sách người dùng:", { allUsers, onlineUsers });
         let contactList = document.querySelector(".contacts-scrollable");
         contactList.innerHTML = ""; // Xóa danh sách cũ
 
         let currentUser = document.getElementById("currentUser").value;
-        console.log("User hiện tại:", currentUser);
+        //// console.log("User hiện tại:", currentUser);
 
         allUsers.forEach(function (user) {
             // Kiểm tra chặt chẽ hơn để đảm bảo không hiển thị user hiện tại
@@ -281,148 +425,116 @@ class Chat {
     }
 
     handleConnected() {
-        console.log("SignalR đã kết nối thành công!");
+       // // console.log("SignalR đã kết nối thành công!");
         let receiverId = document.getElementById("selectedUser").value;
         let signalType = "offer"; // Ví dụ tín hiệu offer khi bắt đầu cuộc gọi
         let signalData = { senderName: document.getElementById("currentUser").getAttribute("data-username") };
         this.sendCallSignal(receiverId, signalType, signalData);
     }
-
-    async handleReceiveCallSignal(senderId, signalType, signalData) {
-        console.log("Tín hiệu cuộc gọi nhận được:", senderId, signalType, signalData);
-        console.log("Trạng thái cuộc gọi hiện tại:", this.currentCallState);
-        console.log("Người gọi hiện tại:", this.currentCallerId);
-
-        if (this.currentCallState === CallState.ENDING) {
-            console.log("Bỏ qua tín hiệu vì cuộc gọi đang kết thúc");
-            return;
-        }
-
-        try {
-            switch (signalType) {
-                case "offer":
-                    // Nếu là người đã bắt đầu cuộc gọi, bỏ qua offer
-                    if (this.currentCallerId === document.getElementById("currentUser").value) {
-                        console.log("Bỏ qua offer vì đây là người gọi");
-                        return;
-                    }
-
-                    // Nếu đang trong cuộc gọi với người khác
-                    if (this.currentCallState === CallState.IN_CALL && 
-                        this.currentCallerId && 
-                        this.currentCallerId !== senderId) {
-                        console.log("Từ chối cuộc gọi mới vì đang trong cuộc gọi khác");
-                        this.sendCallSignal(senderId, "busy", null);
-                        return;
-                    }
-
-                    // Nếu nhận được offer từ cùng người gọi khi đang trong trạng thái calling
-                    if (this.currentCallState === CallState.CALLING && 
-                        this.currentCallerId === senderId) {
-                        console.log("Nhận được offer mới từ cùng người gọi, cập nhật offer");
-                        if (this.peerConnection) {
-                            await this.peerConnection.setRemoteDescription(new RTCSessionDescription(signalData));
-                        }
-                        return;
-                    }
-
-                    console.log("Hiển thị cuộc gọi đến từ:", senderId);
-                    this.currentCallerId = senderId;
-                    await this.handleIncomingCall(senderId, signalData);
-                    break;
-
-                case "answer":
-                    console.log("Nhận tín hiệu answer từ:", senderId);
-                    if (this.currentCallState === CallState.CALLING || this.currentCallState === CallState.IDLE) {
-                        await this.handleCallAnswer(senderId, signalData);
-                    }
-                    break;
-
-                case "connection_established":
-                    console.log("Nhận tín hiệu kết nối thành công từ:", senderId);
-                    // Cập nhật UI cho bên nhận khi kết nối đã được thiết lập
-                    document.getElementById("connectionStatus").style.display = 'none';
-                    document.getElementById("call-interface").style.display = 'block';
-                    this.updateCallState(CallState.IN_CALL);
-                    this.startCallTimer();
-                    break;
-
-                case "candidate":
-                    console.log("Nhận ICE candidate từ:", senderId);
-                    if (!this.peerConnection || !this.peerConnection.remoteDescription) {
-                        console.log("Lưu trữ ICE candidate để xử lý sau");
-                        this.pendingCandidates.push({
-                            senderId: senderId,
-                            candidate: signalData
-                        });
-                        return;
-                    }
-
-                    try {
-                        await this.peerConnection.addIceCandidate(new RTCIceCandidate(signalData));
-                        console.log("Đã thêm ICE candidate thành công");
-                    } catch (error) {
-                        console.error("Lỗi khi thêm ICE candidate:", error);
-                    }
-                    break;
-
-                case "end":
-                    console.log("Nhận tín hiệu kết thúc từ:", senderId);
-                    
-                    // Hiển thị thông báo phù hợp với lý do kết thúc
-                    if (signalData && signalData.reason) {
-                        switch (signalData.reason) {
-                            case "user_ended":
-                                this.showNotification('Người dùng đã từ chối cuộc gọi', 'info');
-                                break;
-                            case "busy":
-                                this.showNotification('Người dùng đang bận', 'warning');
-                                break;
-                            case "timeout":
-                                this.showNotification('Cuộc gọi đã hết thời gian chờ', 'warning');
-                                break;
-                            case "error":
-                                this.showNotification('Đã xảy ra lỗi trong cuộc gọi', 'error');
-                                break;
-                            default:
-                                this.showNotification('Cuộc gọi đã kết thúc', 'info');
-                        }
-                    }
-                    
-                    this.endCall(senderId);
-                    break;
-
-                case "busy":
-                    console.log("Người dùng đang bận");
-                    this.showNotification('Người dùng đang trong cuộc gọi khác. Vui lòng thử lại sau.', 'warning');
-                    this.endCall();
-                    break;
-
-                case "timeout":
-                    console.log("Cuộc gọi hết thời gian");
-                    this.showNotification('Cuộc gọi đã hết thời gian chờ.', 'warning');
-                    this.endCall();
-                    break;
-
-                case "reject":
-                    console.log("Cuộc gọi bị từ chối");
-                    this.showNotification('Cuộc gọi đã bị từ chối.', 'info');
-                    this.endCall();
-                    break;
-
-                case "reconnect-offer":
-                    console.log("Nhận tín hiệu reconnect từ:", senderId);
-                    this.handleReconnectOffer(senderId, signalData);
-                    break;
-            }
-        } catch (error) {
-            console.error("Lỗi xử lý tín hiệu cuộc gọi:", error);
-            this.handleCallError(error, 'receiveCallSignal');
-        }
+    toggleSidebar() {
+        const sidebar = document.querySelector('.chat-sidebar-wrap');
+        const overlay = document.querySelector('.sidebar-overlay');
+        sidebar.classList.toggle('show');
+        overlay.classList.toggle('show');
     }
+    sendMessage() {
+        let message = document.getElementById("messageInput").value.trim();
+        if (message === "") return;
 
+        let chatType = document.getElementById("chatType").value;
+        //console.log("Loại chat hiện tại:", chatType);
+
+        if (chatType === 'direct') {
+            let senderId = document.getElementById("currentUser").value;
+            let senderName = document.getElementById("currentUser").getAttribute("data-username");
+            let senderImage = document.getElementById("currentUserImage").value;
+            let receiverId = document.getElementById("selectedUser").value;
+            let receiverName = document.getElementById("selectedUser").getAttribute("data-username");
+            let receiverImage = document.getElementById("selectedUser").getAttribute("data-imagepath");
+
+            if (!receiverId) {
+               // alert("⚠ Vui lòng chọn một người để nhắn tin.");
+                return;
+            }
+
+            this.connection.invoke("SendMessage", senderId, senderName, senderImage, receiverId, receiverName, receiverImage, message)
+                .catch(function (err) {
+                    console.error("❌ Lỗi gửi tin nhắn:", err.toString());
+                });
+        } else if (chatType === 'group') {
+            let selectedGroupId = document.getElementById("selectedGroup").value;
+           // console.log("Đang gửi tin nhắn đến nhóm:", selectedGroupId);
+
+            if (!selectedGroupId) {
+               // alert("⚠ Vui lòng chọn một nhóm để nhắn tin.");
+                return;
+            }
+
+            this.connection.invoke("SendGroupMessage", selectedGroupId, message)
+                .then(() => {
+                    console.log("✅ Đã gửi tin nhắn nhóm thành công");
+                })
+                .catch(function (err) {
+                    //console.error("❌ Lỗi gửi tin nhắn nhóm:", err.toString());
+                    //alert("Có lỗi xảy ra khi gửi tin nhắn. Vui lòng thử lại.");
+                });
+        }
+
+        document.getElementById("messageInput").value = "";
+    }
+    sendFile(file) {
+        let formData = new FormData();
+        formData.append("file", file);
+
+        if (this.currentChatType === 'direct') {
+            let senderId = document.getElementById("currentUser").value;
+            let receiverId = document.getElementById("selectedUser").value;
+
+            if (!receiverId) {
+               // alert("Please select a contact to send the file to.");
+                return;
+            }
+
+            formData.append("senderId", senderId);
+            formData.append("receiverId", receiverId);
+        } else if (this.currentChatType === 'group') {
+            if (!this.selectedGroupId) {
+                //alert("Please select a group to send the file to.");
+                return;
+            }
+
+            formData.append("groupId", this.selectedGroupId);
+        }
+
+        fetch("/Chat/UploadFile", {
+            method: "POST",
+            body: formData
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log("File uploaded:", data.fileUrl);
+
+                    if (this.currentChatType === 'direct') {
+                        let senderId = document.getElementById("currentUser").value;
+                        let senderName = document.getElementById("currentUser").getAttribute("data-username");
+                        let receiverId = document.getElementById("selectedUser").value;
+                        let receiverName = document.getElementById("selectedUser").getAttribute("data-username");
+
+                        this.connection.invoke("SendFileMessage", senderId, senderName, receiverId, receiverName, data.fileUrl)
+                            .catch(err => console.error("Error sending file message:", err));
+                    } else if (this.currentChatType === 'group') {
+                        this.connection.invoke("SendGroupFileMessage", this.selectedGroupId, data.fileUrl)
+                            .catch(err => console.error("Error sending group file message:", err));
+                    }
+                } else {
+                    alert("Error uploading file!");
+                }
+            })
+            .catch(err => console.error("Error uploading file:", err));
+    }
     handleUpdateGroupList(groups) {
-        console.log('Nhận danh sách nhóm mới:', groups);
+       // // console.log('Nhận danh sách nhóm mới:', groups);
         let groupsList = document.querySelector('.groups-list');
         groupsList.innerHTML = '';
 
@@ -447,7 +559,6 @@ class Chat {
     }
 
     handleGroupCreated(group) {
-        console.log('Nhóm mới được tạo:', group);
         let groupsList = document.querySelector('.groups-list');
 
         let groupItem = document.createElement('div');
@@ -464,25 +575,18 @@ class Chat {
                 <small class="text-muted">Nhóm chat</small>
             </div>
         `;
-
         groupsList.appendChild(groupItem);
     }
 
     handleReceiveGroupMessage(messageObj) {
-        console.log("Nhận tin nhắn nhóm:", messageObj);
+      //  // console.log("Nhận tin nhắn nhóm:", messageObj);
         let selectedGroupId = document.getElementById("selectedGroup").value;
-
-        console.log("So sánh groupId:", {
-            selectedGroupId: selectedGroupId,
-            messageGroupId: messageObj.groupChatId,
-            isEqual: String(messageObj.groupChatId) === String(selectedGroupId)
-        });
 
         if (String(messageObj.groupChatId) === String(selectedGroupId)) {
             let chatContent = document.querySelector(".chat-content");
             let currentUser = document.getElementById("currentUser").value;
 
-            console.log("Hiển thị tin nhắn nhóm từ:", messageObj.senderName);
+           // // console.log("Hiển thị tin nhắn nhóm từ:", messageObj.senderName);
             let messageElement = this.createGroupMessageElement(messageObj, messageObj.senderId === currentUser);
 
             if (messageElement) {
@@ -490,12 +594,12 @@ class Chat {
                 chatContent.scrollTop = chatContent.scrollHeight;
             }
         } else {
-            console.log("Tin nhắn không thuộc nhóm hiện tại");
+           // // console.log("Tin nhắn không thuộc nhóm hiện tại");
         }
     }
 
     handleReceiveGroupMessages(messages) {
-        console.log("Nhận lịch sử tin nhắn nhóm:", messages);
+       // // console.log("Nhận lịch sử tin nhắn nhóm:", messages);
         let chatContent = document.querySelector(".chat-content");
         chatContent.innerHTML = "";
         let currentUser = document.getElementById("currentUser").value;
@@ -509,12 +613,12 @@ class Chat {
             });
             chatContent.scrollTop = chatContent.scrollHeight;
         } else {
-            console.log("Không có tin nhắn hoặc dữ liệu không hợp lệ:", messages);
+            //// console.log("Không có tin nhắn hoặc dữ liệu không hợp lệ:", messages);
         }
     }
 
     handleReceiveOldMessages(messages) {
-        console.log("Nhận tin nhắn cũ:", messages);
+      // // console.log("Nhận tin nhắn cũ:", messages);
         let chatContent = document.querySelector(".chat-content");
         let currentUser = document.getElementById("currentUser").value;
         let selectedUser = document.getElementById("selectedUser").value;
@@ -532,356 +636,7 @@ class Chat {
             });
             chatContent.scrollTop = chatContent.scrollHeight;
         } else {
-            console.log("Không có tin nhắn cũ hoặc dữ liệu không hợp lệ:", messages);
-        }
-    }
-
-    async handleCallAnswer(senderId, answerData) {
-        try {
-            console.log("Xử lý answer từ:", senderId);
-            
-            if (!this.peerConnection) {
-                console.error("Không có peer connection");
-                return;
-            }
-
-            // Set remote description từ answer
-            await this.peerConnection.setRemoteDescription(new RTCSessionDescription({
-                type: 'answer',
-                sdp: answerData.sdp
-            }));
-
-            // Cập nhật UI
-            document.getElementById("call-interface").style.display = 'block';
-            document.getElementById("connectionStatus").style.display = 'none';
-            document.getElementById("incoming-call").style.display = 'none';
-
-            // Cập nhật trạng thái
-            this.updateCallState(CallState.IN_CALL);
-            this.startCallTimer();
-
-        } catch (error) {
-            console.error("Lỗi khi xử lý answer:", error);
-            this.handleCallError(error, 'handleCallAnswer');
-        }
-    }
-
-    async handleIncomingCall(senderId, offerData) {
-        try {
-            console.log("Xử lý cuộc gọi đến từ:", senderId);
-
-            // Kiểm tra các elements cần thiết
-            const incomingCallDiv = document.getElementById("incoming-call");
-            const callInterfaceDiv = document.getElementById("call-interface");
-            const connectionStatusDiv = document.getElementById("connectionStatus");
-            const callerNameElement = document.getElementById("incomingCallName");
-
-            if (!incomingCallDiv || !callInterfaceDiv || !connectionStatusDiv) {
-                console.error("Không tìm thấy các elements UI cần thiết");
-                this.showNotification("Có lỗi khi hiển thị giao diện cuộc gọi", "error");
-                return;
-            }
-
-            // Hiển thị modal cuộc gọi
-            this.showModal();
-
-            // Lấy tên người gọi từ danh bạ
-            const callerContact = document.querySelector(`.contact[data-userid="${senderId}"]`);
-            const callerName = callerContact ? callerContact.getAttribute("data-username") || "Người dùng" : "Người dùng";
-
-            // Cập nhật UI cho cuộc gọi đến
-            if (callerNameElement) {
-                callerNameElement.textContent = callerName;
-            }
-
-            // Ẩn/hiện các phần giao diện
-            incomingCallDiv.style.display = 'block';
-            callInterfaceDiv.style.display = 'none';
-            connectionStatusDiv.style.display = 'none';
-
-            // Phát âm thanh chuông
-            try {
-                const ringtone = new Audio('/content/sounds/ringtone.mp3');
-                ringtone.loop = true;
-                await ringtone.play().catch(error => {
-                    console.warn("Không thể phát âm thanh chuông:", error);
-                });
-
-                // Thiết lập timeout cho cuộc gọi đến
-                this.incomingCallTimeout = setTimeout(() => {
-                    if (!this.callAccepted) {
-                        ringtone.pause();
-                        this.sendCallSignal(senderId, "timeout", null);
-                        this.endCall();
-                    }
-                }, this.CALL_TIMEOUT);
-
-                // Xử lý sự kiện chấp nhận cuộc gọi
-                const acceptButton = document.getElementById("acceptCallButton");
-                const rejectButton = document.getElementById("rejectCallButton");
-
-                if (!acceptButton || !rejectButton) {
-                    throw new Error("Không tìm thấy nút điều khiển cuộc gọi");
-                }
-
-                // Xóa event listeners cũ nếu có
-                const newAcceptButton = acceptButton.cloneNode(true);
-                const newRejectButton = rejectButton.cloneNode(true);
-                acceptButton.parentNode.replaceChild(newAcceptButton, acceptButton);
-                rejectButton.parentNode.replaceChild(newRejectButton, rejectButton);
-
-                // Thêm event listeners mới
-                newAcceptButton.onclick = async () => {
-                    try {
-                        ringtone.pause();
-                        this.callAccepted = true;
-                        clearTimeout(this.incomingCallTimeout);
-
-                        // Khởi tạo peer connection
-                        await this.initializePeerConnection(senderId, offerData);
-
-                        // Cập nhật UI
-                        incomingCallDiv.style.display = 'none';
-                        callInterfaceDiv.style.display = 'block';
-                        connectionStatusDiv.style.display = 'block';
-                        document.getElementById("statusMessage").textContent = 'Đang thiết lập kết nối...';
-
-                        // Cập nhật trạng thái
-                        this.updateCallState(CallState.IN_CALL);
-                        this.currentCallerId = senderId;
-                    } catch (error) {
-                        console.error("Lỗi khi chấp nhận cuộc gọi:", error);
-                        this.handleCallError(error, 'acceptCall');
-                    }
-                };
-
-                newRejectButton.onclick = () => {
-                    ringtone.pause();
-                    clearTimeout(this.incomingCallTimeout);
-                    this.sendCallSignal(senderId, "reject", null);
-                    this.endCall();
-                };
-
-            } catch (error) {
-                console.error("Lỗi khi xử lý âm thanh hoặc nút điều khiển:", error);
-                this.handleCallError(error, 'handleIncomingCall');
-            }
-
-        } catch (error) {
-            console.error("Lỗi khi xử lý cuộc gọi đến:", error);
-            this.handleCallError(error, 'handleIncomingCall');
-            this.closeModal();
-        }
-    }
-
-    async initializePeerConnection(senderId, offerData) {
-        try {
-            // Lấy cấu hình ICE servers từ Twilio
-            let configuration;
-            try {
-                const response = await fetch('/Chat/GetTwilioToken');
-                if (!response.ok) {
-                    throw new Error('Không thể lấy cấu hình ICE servers từ Twilio');
-                }
-                const data = await response.json();
-                configuration = {
-                    iceServers: [
-                        ...(data.iceServers || []),
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
-                        { urls: 'stun:stun2.l.google.com:19302' }
-                    ],
-                    iceCandidatePoolSize: 10,
-                    bundlePolicy: 'max-bundle',
-                    rtcpMuxPolicy: 'require'
-                };
-                console.log("Đã nhận cấu hình ICE servers:", configuration);
-            } catch (error) {
-                console.warn("Lỗi khi lấy Twilio ICE servers, sử dụng Google STUN:", error);
-                configuration = {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
-                    ]
-                };
-            }
-
-            this.peerConnection = new RTCPeerConnection(configuration);
-            console.log("Khởi tạo peer connection với cấu hình:", configuration);
-
-            // Thiết lập local stream
-            const mediaStream = await this.setupMediaStream();
-            
-            // Thêm transceivers cho audio và video
-            this.peerConnection.addTransceiver('audio', {
-                direction: 'sendrecv',
-                streams: [mediaStream]
-            });
-            this.peerConnection.addTransceiver('video', {
-                direction: 'sendrecv',
-                streams: [mediaStream]
-            });
-
-            // Thêm tracks vào peer connection
-            mediaStream.getTracks().forEach(track => {
-                console.log("Thêm local track:", track.kind);
-                this.peerConnection.addTrack(track, mediaStream);
-            });
-
-            // Hiển thị local video
-            const localVideoElement = document.getElementById("localVideo");
-            if (localVideoElement) {
-                localVideoElement.srcObject = mediaStream;
-                await this.safePlay(localVideoElement);
-            }
-
-            // Lắng nghe sự kiện ICE candidate
-            this.peerConnection.addEventListener('icecandidate', async event => {
-                if (event.candidate) {
-                    console.log("Gửi ICE candidate đến:", senderId);
-                    await this.sendCallSignal(senderId, "candidate", event.candidate);
-                }
-            });
-
-            // Lắng nghe sự kiện kết nối thay đổi
-            this.peerConnection.addEventListener('connectionstatechange', async event => {
-                console.log("Connection state changed:", this.peerConnection.connectionState);
-                if (this.peerConnection.connectionState === 'connected') {
-                    console.log("Peers connected successfully!");
-                    this.showNotification('Kết nối thành công!', 'success');
-                    document.getElementById("connectionStatus").style.display = 'none';
-                }
-            });
-
-            // Lắng nghe remote tracks
-            this.peerConnection.addEventListener('track', async (event) => {
-                console.log("Nhận được remote track:", event.track.kind);
-                const remoteVideo = document.getElementById("remoteVideo");
-                if (remoteVideo) {
-                    const [remoteStream] = event.streams;
-                    if (!remoteStream) {
-                        console.error("Không có remote stream trong track event");
-                        return;
-                    }
-
-                    console.log("Thiết lập remote stream:", {
-                        id: remoteStream.id,
-                        tracks: remoteStream.getTracks().map(t => ({
-                            kind: t.kind,
-                            enabled: t.enabled,
-                            muted: t.muted
-                        }))
-                    });
-
-                    remoteVideo.srcObject = remoteStream;
-                    try {
-                        await remoteVideo.play();
-                        console.log("Remote video đã bắt đầu phát");
-                    } catch (error) {
-                        console.error("Lỗi khi phát remote video:", error);
-                        if (error.name === 'NotAllowedError') {
-                            this.showNotification('Vui lòng cho phép tự động phát video', 'warning');
-                        }
-                    }
-                }
-            });
-
-            // Set remote description từ offer
-            await this.peerConnection.setRemoteDescription(new RTCSessionDescription({
-                type: 'offer',
-                sdp: offerData.sdp
-            }));
-
-            // Tạo answer
-            const answer = await this.peerConnection.createAnswer();
-            await this.peerConnection.setLocalDescription(answer);
-
-            // Gửi answer
-            await this.sendCallSignal(senderId, "answer", {
-                type: 'answer',
-                sdp: answer.sdp,
-                senderName: document.getElementById("currentUser").getAttribute("data-username")
-            });
-
-        } catch (error) {
-            console.error("Lỗi khi khởi tạo peer connection:", error);
-            this.handleCallError(error, 'initializePeerConnection');
-            throw error;
-        }
-    }
-
-    endCall(initiatorId = null) {
-        console.log("Kết thúc cuộc gọi", initiatorId ? `từ ${initiatorId}` : "");
-
-        // Cập nhật trạng thái
-        this.updateCallState(CallState.ENDING);
-
-        // Nếu người hiện tại là người chủ động kết thúc cuộc gọi
-        // hoặc nếu không có initiatorId (tức là người này chủ động kết thúc)
-        if (!initiatorId) {
-            // Gửi tín hiệu kết thúc đến người còn lại trong cuộc gọi
-            const currentUserId = document.getElementById("currentUser").value;
-            const otherPartyId = this.currentCallerId === currentUserId ? 
-                document.getElementById("selectedUser").value : this.currentCallerId;
-
-            if (otherPartyId) {
-                console.log("Gửi tín hiệu kết thúc đến:", otherPartyId);
-                this.sendCallSignal(otherPartyId, "end", {
-                    initiator: currentUserId,
-                    reason: "user_ended"
-                });
-            }
-        }
-
-        // Dừng media streams
-        const localVideo = document.getElementById("localVideo");
-        const remoteVideo = document.getElementById("remoteVideo");
-
-        if (localVideo && localVideo.srcObject) {
-            localVideo.srcObject.getTracks().forEach(track => track.stop());
-            localVideo.srcObject = null;
-        }
-
-        if (remoteVideo && remoteVideo.srcObject) {
-            remoteVideo.srcObject.getTracks().forEach(track => track.stop());
-            remoteVideo.srcObject = null;
-        }
-
-        // Đóng peer connection
-        if (this.peerConnection) {
-            this.peerConnection.close();
-            this.peerConnection = null;
-        }
-
-        // Reset các trạng thái
-        this.currentCallState = CallState.IDLE;
-        this.currentCallerId = null;
-        this.callAccepted = false;
-        this.stopCallTimer();
-
-        // Đóng modal và cập nhật UI
-        this.closeModal();
-        document.getElementById("connectionStatus").style.display = 'none';
-        document.getElementById("call-interface").style.display = 'none';
-        document.getElementById("incoming-call").style.display = 'none';
-
-        // Xóa timeout nếu có
-        if (this.incomingCallTimeout) {
-            clearTimeout(this.incomingCallTimeout);
-            this.incomingCallTimeout = null;
-        }
-
-        // Xóa interval kiểm tra kết nối nếu có
-        if (this.connectionCheckInterval) {
-            clearInterval(this.connectionCheckInterval);
-            this.connectionCheckInterval = null;
-        }
-
-        // Hiển thị thông báo phù hợp
-        if (initiatorId) {
-            this.showNotification('Cuộc gọi đã kết thúc bởi người dùng khác', 'info');
-        } else {
-            this.showNotification('Cuộc gọi đã kết thúc', 'info');
+           // // console.log("Không có tin nhắn cũ hoặc dữ liệu không hợp lệ:", messages);
         }
     }
 
@@ -896,118 +651,136 @@ class Chat {
     showModal() {
         $("#callModal").modal("show");
     }
+    loadGroupMembers() {
+        const currentUser = document.getElementById("currentUser").value;
+        const membersList = document.querySelector(".member-list");
 
-    updateCallState(newState) {
-        console.log(`Chuyển trạng thái cuộc gọi: ${this.currentCallState} -> ${newState}`);
-        this.currentCallState = newState;
-        this.updateCallUI(newState);
+        if (!membersList) return;
+
+        // Lấy danh sách người dùng từ danh sách contacts hiện có
+        const contacts = document.querySelectorAll('.contacts-scrollable .contact');
+        membersList.innerHTML = '';
+
+        contacts.forEach(contact => {
+            const userId = contact.getAttribute('data-userid');
+            const userName = contact.getAttribute('data-username');
+            const userImage = contact.querySelector('img').src;
+
+            if (userId && userId !== currentUser) {
+                const memberItem = document.createElement("div");
+                memberItem.className = "member-item d-flex align-items-center p-2 border-bottom";
+
+                memberItem.innerHTML = `
+                    <label class="checkbox checkbox-outline-primary d-flex align-items-center mb-0">
+                        <input type="checkbox" class="group-member-checkbox" id="member${userId}" value="${userId}">
+                        <span>
+                            <div class="d-flex align-items-center">
+                                <div class="avatar-wrapper me-2">
+                                    <img class="avatar-sm rounded-circle" src="${userImage}" alt="${userName}">
+                                </div>
+                                <div class="member-info">
+                                    <h6 class="mb-0">${userName}</h6>
+                                </div>
+                            </div>
+                        </span>
+                        <span class="checkmark mt-2"></span>
+                    </label>
+                `;
+
+                // Thêm hover effect
+                memberItem.addEventListener('mouseover', () => {
+                    memberItem.style.backgroundColor = '#f8f9fa';
+                });
+                memberItem.addEventListener('mouseout', () => {
+                    memberItem.style.backgroundColor = '';
+                });
+
+                membersList.appendChild(memberItem);
+            }
+        });
+
+        // Thêm style cho member list
+        membersList.style.maxHeight = '300px';
+        membersList.style.overflowY = 'auto';
+        membersList.style.padding = '0';
+        membersList.style.margin = '10px 0';
+        membersList.style.borderRadius = '8px';
+        membersList.style.border = '1px solid #dee2e6';
+    }
+    createGroupSubmit(event) {
+        event.preventDefault();
+        
+        // Lấy tên nhóm
+        const groupName = document.getElementById("groupName").value.trim();
+        if (!groupName) {
+            this.showNotification("Vui lòng nhập tên nhóm!", "warning");
+            return;
+        }
+
+        // Lấy danh sách thành viên được chọn
+        const selectedMembers = [];
+        document.querySelectorAll('.group-member-checkbox:checked').forEach(checkbox => {
+            selectedMembers.push(checkbox.value);
+        });
+
+        if (selectedMembers.length === 0) {
+            this.showNotification("Vui lòng chọn ít nhất một thành viên!", "warning");
+            return;
+        }
+
+        // Thêm người tạo nhóm vào danh sách thành viên
+        const currentUserId = document.getElementById("currentUser").value;
+        if (!selectedMembers.includes(currentUserId)) {
+            selectedMembers.push(currentUserId);
+        }
+        // Gọi API tạo nhóm
+        this.connection.invoke("CreateGroup", groupName, selectedMembers)
+            .then(() => {
+                this.showNotification("Tạo nhóm thành công!", "success");
+                this.closeModalGroup();
+                // Reset form
+                document.getElementById("createGroupForm").reset();
+                document.querySelectorAll('.group-member-checkbox').forEach(cb => cb.checked = false);
+            })
+            .catch(err => {
+                this.showNotification("Có lỗi xảy ra khi tạo nhóm. Vui lòng thử lại!", "error");
+            });
     }
 
-    updateCallUI(state) {
-        const callError = document.getElementById('callError');
-        const connectionStatus = document.getElementById('connectionStatus');
-        const callInterface = document.getElementById('call-interface');
-        const incomingCall = document.getElementById('incoming-call');
-        const statusMessage = document.getElementById('statusMessage');
+    showModalGroup() {
+        // Load danh sách thành viên trước khi hiển thị modal
+        this.loadGroupMembers();
+        
+        // Hiển thị modal
+        $("#createGroupModal").modal("show");
 
-        switch (state) {
-            case CallState.IDLE:
-                callInterface.style.display = 'none';
-                incomingCall.style.display = 'none';
-                connectionStatus.style.display = 'none';
-                this.stopCallTimer();
-                break;
-
-            case CallState.CALLING:
-                callInterface.style.display = 'block';
-                connectionStatus.style.display = 'block';
-                statusMessage.textContent = 'Đang kết nối cuộc gọi...';
-                break;
-
-            case CallState.IN_CALL:
-                callInterface.style.display = 'block';
-                incomingCall.style.display = 'none';
-                connectionStatus.style.display = 'none';
-                this.startCallTimer();
-                break;
-
-            case CallState.ENDING:
-                connectionStatus.style.display = 'block';
-                statusMessage.textContent = 'Đang kết thúc cuộc gọi...';
-                break;
+        // Xử lý sự kiện submit form tạo nhóm
+        const createGroupForm = document.getElementById("createGroupForm");
+        if (createGroupForm) {
+            createGroupForm.onsubmit = (e) => this.createGroupSubmit(e);
         }
     }
 
-    handleCallError(error, context) {
-        console.error(`Lỗi trong ${context}:`, error);
-
-        const errorDiv = document.getElementById('callError');
-        const errorMessage = document.getElementById('errorMessage');
-
-        let message = 'Đã xảy ra lỗi trong cuộc gọi';
-        switch (error.name) {
-            case 'NotAllowedError':
-                message = 'Vui lòng cho phép truy cập microphone/camera trong trình duyệt của bạn';
-                break;
-            case 'NotFoundError':
-                message = 'Không tìm thấy thiết bị media (microphone/camera)';
-                break;
-            case 'NotReadableError':
-                message = 'Thiết bị media đang được sử dụng bởi ứng dụng khác';
-                break;
-            case 'ConnectionError':
-                message = 'Lỗi kết nối mạng';
-                break;
-            default:
-                message = `Lỗi: ${error.message || 'Không xác định'}`;
+    closeModalGroup() {
+        // Đóng modal
+        $("#createGroupModal").modal("hide");
+        
+        // Reset form
+        const createGroupForm = document.getElementById("createGroupForm");
+        if (createGroupForm) {
+            createGroupForm.reset();
         }
-
-        errorMessage.textContent = message;
-        errorDiv.style.display = 'block';
-
-        // Tự động ẩn thông báo lỗi sau 5 giây
-        setTimeout(() => {
-            errorDiv.style.display = 'none';
-        }, 5000);
-
-        this.endCall();
-    }
-
-    startCallTimer() {
-        // Đảm bảo dừng timer cũ nếu có
-        this.stopCallTimer();
-
-        const timerElement = document.getElementById('callTimer');
-        if (timerElement) {
-            timerElement.style.display = 'inline';
-            this.callDuration = 0;
-            this.callTimer = setInterval(() => {
-                this.updateCallTimer();
-            }, 1000);
+        
+        // Bỏ chọn tất cả các checkbox thành viên
+        document.querySelectorAll('.group-member-checkbox').forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        
+        // Xóa danh sách thành viên
+        const membersList = document.querySelector(".member-list");
+        if (membersList) {
+            membersList.innerHTML = "";
         }
-    }
-
-    stopCallTimer() {
-        if (this.callTimer) {
-            clearInterval(this.callTimer);
-            this.callTimer = null;
-        }
-        const timerElement = document.getElementById('callTimer');
-        if (timerElement) {
-            timerElement.style.display = 'none';
-            timerElement.textContent = '00:00';
-        }
-        this.callDuration = 0;
-    }
-
-    updateCallTimer() {
-        const timerElement = document.getElementById('callTimer');
-        if (!timerElement) return;
-
-        this.callDuration++;
-        const minutes = Math.floor(this.callDuration / 60);
-        const seconds = this.callDuration % 60;
-        timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     }
 
     showNotification(message, type = 'info') {
@@ -1052,379 +825,8 @@ class Chat {
             }, 500);
         }, 3000);
     }
-
-    showModalGroup() {
-        // Load danh sách thành viên trước khi hiển thị modal
-        this.loadGroupMembers();
-        
-        // Hiển thị modal
-        $("#createGroupModal").modal("show");
-
-        // Xử lý sự kiện submit form tạo nhóm
-        const createGroupForm = document.getElementById("createGroupForm");
-        if (createGroupForm) {
-            createGroupForm.onsubmit = (e) => {
-                e.preventDefault();
-                
-                // Lấy tên nhóm
-                const groupName = document.getElementById("groupName").value.trim();
-                if (!groupName) {
-                    alert("Vui lòng nhập tên nhóm!");
-                    return;
-                }
-
-                // Lấy danh sách thành viên được chọn
-                const selectedMembers = [];
-                document.querySelectorAll('.group-member-checkbox:checked').forEach(checkbox => {
-                    selectedMembers.push(checkbox.value);
-                });
-
-                if (selectedMembers.length === 0) {
-                    alert("Vui lòng chọn ít nhất một thành viên!");
-                    return;
-                }
-
-                // Thêm người tạo nhóm vào danh sách thành viên
-                const currentUserId = document.getElementById("currentUser").value;
-                if (!selectedMembers.includes(currentUserId)) {
-                    selectedMembers.push(currentUserId);
-                }
-
-                // Gọi API tạo nhóm
-                this.connection.invoke("CreateGroup", groupName, selectedMembers)
-                    .then(() => {
-                        console.log("Tạo nhóm thành công");
-                        this.closeModalGroup();
-                        // Reset form
-                        createGroupForm.reset();
-                        document.querySelectorAll('.group-member-checkbox').forEach(cb => cb.checked = false);
-                    })
-                    .catch(err => {
-                        console.error("Lỗi khi tạo nhóm:", err);
-                        alert("Có lỗi xảy ra khi tạo nhóm. Vui lòng thử lại!");
-                    });
-            };
-        }
-    }
-
-    closeModalGroup() {
-        // Đóng modal
-        $("#createGroupModal").modal("hide");
-        
-        // Reset form
-        const createGroupForm = document.getElementById("createGroupForm");
-        if (createGroupForm) {
-            createGroupForm.reset();
-        }
-        
-        // Bỏ chọn tất cả các checkbox thành viên
-        document.querySelectorAll('.group-member-checkbox').forEach(checkbox => {
-            checkbox.checked = false;
-        });
-        
-        // Xóa danh sách thành viên
-        const membersList = document.querySelector(".group-members-list");
-        if (membersList) {
-            membersList.innerHTML = "";
-        }
-    }
-
-    async startCall(receiverId) {
-        try {
-            console.log("Bắt đầu cuộc gọi đến:", receiverId);
-
-            if (this.currentCallState !== CallState.IDLE) {
-                throw new Error("Đang trong cuộc gọi khác");
-            }
-
-            // Cập nhật trạng thái
-            this.updateCallState(CallState.CALLING);
-            this.currentCallerId = document.getElementById("currentUser").value;
-
-            // Lấy cấu hình ICE servers từ Twilio
-            let configuration;
-            try {
-                const response = await fetch('/Chat/GetTwilioToken');
-                if (!response.ok) {
-                    throw new Error('Không thể lấy cấu hình ICE servers từ Twilio');
-                }
-                const data = await response.json();
-                configuration = {
-                    iceServers: [
-                        ...(data.iceServers || []),
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
-                        { urls: 'stun:stun2.l.google.com:19302' }
-                    ],
-                    iceCandidatePoolSize: 10,
-                    bundlePolicy: 'max-bundle',
-                    rtcpMuxPolicy: 'require'
-                };
-                console.log("Đã nhận cấu hình ICE servers:", configuration);
-            } catch (error) {
-                console.warn("Lỗi khi lấy Twilio ICE servers, sử dụng Google STUN:", error);
-                configuration = {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
-                    ]
-                };
-            }
-
-            this.peerConnection = new RTCPeerConnection(configuration);
-            console.log("Khởi tạo peer connection với cấu hình:", configuration);
-
-            // Thiết lập local stream
-            const mediaStream = await this.setupMediaStream();
-            
-            // Thêm transceivers cho audio và video
-            this.peerConnection.addTransceiver('audio', {
-                direction: 'sendrecv',
-                streams: [mediaStream]
-            });
-            this.peerConnection.addTransceiver('video', {
-                direction: 'sendrecv',
-                streams: [mediaStream]
-            });
-
-            // Thêm tracks vào peer connection
-            mediaStream.getTracks().forEach(track => {
-                console.log("Thêm local track:", track.kind);
-                this.peerConnection.addTrack(track, mediaStream);
-            });
-
-            // Hiển thị local video
-            const localVideoElement = document.getElementById("localVideo");
-            if (localVideoElement) {
-                localVideoElement.srcObject = mediaStream;
-                await this.safePlay(localVideoElement);
-            }
-
-            // Lắng nghe sự kiện ICE candidate
-            this.peerConnection.addEventListener('icecandidate', async event => {
-                if (event.candidate) {
-                    console.log("Gửi ICE candidate đến:", receiverId);
-                    await this.sendCallSignal(receiverId, "candidate", event.candidate);
-                }
-            });
-
-            // Lắng nghe sự kiện kết nối thay đổi
-            this.peerConnection.addEventListener('connectionstatechange', async event => {
-                console.log("Connection state changed:", this.peerConnection.connectionState);
-                if (this.peerConnection.connectionState === 'connected') {
-                    console.log("Peers connected successfully!");
-                    this.showNotification('Kết nối thành công!', 'success');
-                    document.getElementById("connectionStatus").style.display = 'none';
-                }
-            });
-
-            // Lắng nghe remote tracks
-            this.peerConnection.addEventListener('track', async (event) => {
-                console.log("Nhận được remote track:", event.track.kind);
-                const remoteVideo = document.getElementById("remoteVideo");
-                if (remoteVideo) {
-                    const [remoteStream] = event.streams;
-                    if (!remoteStream) {
-                        console.error("Không có remote stream trong track event");
-                        return;
-                    }
-
-                    console.log("Thiết lập remote stream:", {
-                        id: remoteStream.id,
-                        tracks: remoteStream.getTracks().map(t => ({
-                            kind: t.kind,
-                            enabled: t.enabled,
-                            muted: t.muted
-                        }))
-                    });
-
-                    remoteVideo.srcObject = remoteStream;
-                    try {
-                        await remoteVideo.play();
-                        console.log("Remote video đã bắt đầu phát");
-                    } catch (error) {
-                        console.error("Lỗi khi phát remote video:", error);
-                        if (error.name === 'NotAllowedError') {
-                            this.showNotification('Vui lòng cho phép tự động phát video', 'warning');
-                        }
-                    }
-                }
-            });
-
-            // Tạo và gửi offer
-            const offer = await this.peerConnection.createOffer({
-                offerToReceiveAudio: true,
-                offerToReceiveVideo: true
-            });
-            await this.peerConnection.setLocalDescription(offer);
-            
-            this.sendCallSignal(receiverId, "offer", {
-                type: 'offer',
-                sdp: offer.sdp,
-                senderName: document.getElementById("currentUser").getAttribute("data-username")
-            });
-
-            // Hiển thị UI
-            this.showModal();
-            document.getElementById("call-interface").style.display = 'block';
-            document.getElementById("connectionStatus").style.display = 'block';
-            document.getElementById("statusMessage").textContent = 'Đang kết nối cuộc gọi...';
-
-            // Set timeout
-            setTimeout(() => {
-                if (this.currentCallState === CallState.CALLING) {
-                    this.sendCallSignal(receiverId, "timeout", null);
-                    this.endCall();
-                }
-            }, this.CALL_TIMEOUT);
-
-        } catch (error) {
-            console.error("Lỗi khi bắt đầu cuộc gọi:", error);
-            this.handleCallError(error, 'startCall');
-        }
-    }
-
-    async safePlay(videoElement) {
-        try {
-            // Đợi một frame animation để đảm bảo DOM đã được cập nhật
-            await new Promise(resolve => requestAnimationFrame(resolve));
-            
-            if (!videoElement.srcObject) {
-                console.warn('Video element không có srcObject');
-                return false;
-            }
-
-            await videoElement.play();
-            return true;
-        } catch (error) {
-            if (error.name === 'AbortError') {
-                // Thử lại sau 100ms nếu bị gián đoạn
-                await new Promise(resolve => setTimeout(resolve, 100));
-                try {
-                    await videoElement.play();
-                    return true;
-                } catch (retryError) {
-                    console.error('Không thể phát video sau khi thử lại:', retryError);
-                    return false;
-                }
-            }
-            console.error('Lỗi khi phát video:', error);
-            return false;
-        }
-    }
-
-    async setupMediaStream() {
-        try {
-            console.log("Bắt đầu thiết lập media stream...");
-            
-            // Kiểm tra thiết bị trước khi yêu cầu quyền truy cập
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const cameras = devices.filter(device => device.kind === 'videoinput');
-            const microphones = devices.filter(device => device.kind === 'audioinput');
-            
-            console.log('Thiết bị có sẵn:', {
-                cameras: cameras.length,
-                microphones: microphones.length
-            });
-
-            if (microphones.length === 0) {
-                this.showNotification('Không tìm thấy microphone. Vui lòng kết nối microphone và thử lại.', 'error');
-                throw new Error('Không tìm thấy thiết bị âm thanh');
-            }
-
-            // Thử với video trước
-            let stream;
-            try {
-                if (cameras.length > 0) {
-                    stream = await navigator.mediaDevices.getUserMedia({
-                        audio: {
-                            deviceId: microphones[0].deviceId,
-                            echoCancellation: true,
-                            noiseSuppression: true,
-                            autoGainControl: true
-                        },
-                        video: {
-                            deviceId: cameras[0].deviceId,
-                            width: { ideal: 640, max: 1280 },
-                            height: { ideal: 480, max: 720 },
-                            frameRate: { ideal: 30, max: 60 }
-                        }
-                    });
-                    console.log('Đã thiết lập stream video và audio thành công');
-                } else {
-                    console.log('Không tìm thấy camera, chuyển sang chế độ audio only');
-                    this.showNotification('Không tìm thấy camera, chuyển sang chế độ audio only', 'warning');
-                    stream = await navigator.mediaDevices.getUserMedia({
-                        audio: {
-                            deviceId: microphones[0].deviceId,
-                            echoCancellation: true,
-                            noiseSuppression: true,
-                            autoGainControl: true
-                        }
-                    });
-                }
-            } catch (error) {
-                console.error('Lỗi khi thiết lập media stream:', error);
-                
-                if (error.name === 'NotAllowedError') {
-                    this.showNotification('Vui lòng cho phép truy cập microphone/camera trong trình duyệt của bạn', 'error');
-                    throw error;
-                }
-                
-                // Thử lại với audio only nếu video thất bại
-                console.log('Thử lại với audio only...');
-                stream = await navigator.mediaDevices.getUserMedia({
-                    audio: {
-                        deviceId: microphones[0].deviceId,
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
-                    }
-                });
-            }
-
-            // Kiểm tra và log thông tin về tracks
-            const videoTracks = stream.getVideoTracks();
-            const audioTracks = stream.getAudioTracks();
-            
-            console.log('Stream tracks:', {
-                video: videoTracks.map(track => ({
-                    label: track.label,
-                    enabled: track.enabled,
-                    muted: track.muted
-                })),
-                audio: audioTracks.map(track => ({
-                    label: track.label,
-                    enabled: track.enabled,
-                    muted: track.muted
-                }))
-            });
-
-            // Thêm listeners cho tracks
-            [...videoTracks, ...audioTracks].forEach(track => {
-                track.onended = () => {
-                    console.log(`${track.kind} track ended:`, track.label);
-                    this.showNotification(`${track.kind === 'video' ? 'Camera' : 'Microphone'} đã bị ngắt kết nối. Vui lòng kiểm tra thiết bị.`, 'warning');
-                };
-                track.onmute = () => {
-                    console.log(`${track.kind} track muted:`, track.label);
-                };
-                track.onunmute = () => {
-                    console.log(`${track.kind} track unmuted:`, track.label);
-                };
-            });
-
-            return stream;
-        } catch (error) {
-            console.error('Lỗi khi thiết lập media stream:', error);
-            this.showNotification('Không thể thiết lập kết nối audio/video. Vui lòng kiểm tra thiết bị và quyền truy cập.', 'error');
-            throw error;
-        }
-    }
-
+    //#endregion Chat
     sendCallSignal(receiverId, signalType, signalData) {
-        console.log("Gửi tín hiệu cuộc gọi:", { receiverId, signalType, signalData });
-
         // Lấy thông tin người gửi
         const senderId = document.getElementById("currentUser").value;
         const senderName = document.getElementById("currentUser").getAttribute("data-username");
@@ -1432,316 +834,899 @@ class Chat {
         // Gửi tín hiệu đến server
         return this.connection.invoke("SendCallSignal", senderId, receiverId, signalType, signalData)
             .then(() => {
-                console.log("✅ Tín hiệu cuộc gọi đã được gửi thành công");
+                // console.log("✅ Tín hiệu cuộc gọi đã được gửi thành công");
             })
             .catch(err => {
-                console.error("❌ Lỗi gửi tín hiệu cuộc gọi:", err);
-                this.handleCallError(err, 'sendCallSignal');
+                // console.error("❌ Lỗi gửi tín hiệu cuộc gọi:", err);
             });
     }
 
-    async handleRemoteStream(event, remoteVideo) {
-        if (remoteVideo && event.streams && event.streams[0]) {
-            const stream = event.streams[0];
-            
-            try {
-                console.log('Xử lý remote stream mới');
-                
-                // Log chi tiết về stream và tracks
-                const streamInfo = {
-                    id: stream.id,
-                    active: stream.active,
-                    tracks: stream.getTracks().map(track => ({
-                        kind: track.kind,
-                        id: track.id,
-                        enabled: track.enabled,
-                        muted: track.muted,
-                        readyState: track.readyState,
-                        settings: track.getSettings()
-                    }))
-                };
-                console.log('Chi tiết remote stream:', streamInfo);
-
-                // Dừng stream cũ nếu có
-                if (remoteVideo.srcObject) {
-                    remoteVideo.srcObject.getTracks().forEach(track => track.stop());
-                }
-                
-                // Đợi một chút trước khi set srcObject mới
-                remoteVideo.srcObject = null;
-                await new Promise(resolve => setTimeout(resolve, 100));
-
-                // Đảm bảo video element đã được load
-                await new Promise((resolve, reject) => {
-                    remoteVideo.onloadedmetadata = resolve;
-                    remoteVideo.onerror = reject;
-                    remoteVideo.srcObject = stream;
-                });
-                
-                // Kiểm tra và kích hoạt video track
-                const videoTracks = stream.getVideoTracks();
-                const audioTracks = stream.getAudioTracks();
-                const hasVideoTrack = videoTracks.length > 0;
-                const hasAudioTrack = audioTracks.length > 0;
-                
-                console.log('Remote stream tracks:', {
-                    hasVideo: hasVideoTrack,
-                    hasAudio: hasAudioTrack,
-                    videoTracks: videoTracks.map(track => ({
-                        label: track.label,
-                        enabled: track.enabled,
-                        settings: track.getSettings()
-                    })),
-                    audioTracks: audioTracks.map(track => ({
-                        label: track.label,
-                        enabled: track.enabled
-                    }))
-                });
-
-                // Xử lý video tracks
-                if (hasVideoTrack) {
-                    videoTracks.forEach(track => {
-                        track.enabled = true;
-                        
-                        track.onmute = () => {
-                            console.log('Video track bị mute:', track.label);
-                            this.showNotification('Video của người dùng khác đã bị tắt', 'info');
-                            this.updateRemoteVideoUI(false);
-                        };
-                        
-                        track.onunmute = () => {
-                            console.log('Video track được unmute:', track.label);
-                            this.showNotification('Video của người dùng khác đã được bật', 'info');
-                            this.updateRemoteVideoUI(true);
-                        };
-                        
-                        track.onended = () => {
-                            console.log('Video track kết thúc:', track.label);
-                            this.showNotification('Kết nối video đã bị ngắt', 'warning');
-                            this.updateRemoteVideoUI(false);
-                        };
-                    });
-
-                    // Thiết lập style cho video element
-                    this.updateRemoteVideoUI(true);
-                } else {
-                    console.log('Không có video track, chuyển sang chế độ audio only');
-                    this.updateRemoteVideoUI(false);
-                }
-
-                // Xử lý audio tracks
-                if (hasAudioTrack) {
-                    audioTracks.forEach(track => {
-                        track.enabled = true;
-                        
-                        track.onmute = () => {
-                            console.log('Audio track bị mute:', track.label);
-                            this.showNotification('Âm thanh của người dùng khác đã bị tắt', 'info');
-                            this.updateRemoteAudioUI(false);
-                        };
-                        
-                        track.onunmute = () => {
-                            console.log('Audio track được unmute:', track.label);
-                            this.showNotification('Âm thanh của người dùng khác đã được bật', 'info');
-                            this.updateRemoteAudioUI(true);
-                        };
-                    });
-                } else {
-                    console.log('Không có audio track');
-                    this.showNotification('Không có âm thanh từ người dùng khác', 'warning');
-                    this.updateRemoteAudioUI(false);
-                }
-
-                // Đảm bảo audio được xử lý đúng
-                remoteVideo.muted = this.isSpeakerMuted;
-
-                // Thử phát video
-                try {
-                    await remoteVideo.play();
-                    console.log('Remote video đã bắt đầu phát');
-                } catch (playError) {
-                    console.error('Lỗi khi phát remote video:', playError);
-                    if (playError.name === 'NotAllowedError') {
-                        this.showNotification('Vui lòng cho phép tự động phát video', 'warning');
-                    }
-                }
-
-                // Kiểm tra kết nối sau khi thiết lập
-                this.checkStreamConnection(stream);
-
-            } catch (error) {
-                console.error("Lỗi khi xử lý remote stream:", error);
-                this.handleCallError(error, 'handleRemoteStream');
+    async checkMediaDevices() {
+        try {
+            // Kiểm tra xem trình duyệt có hỗ trợ getUserMedia không
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error("Trình duyệt của bạn không hỗ trợ getUserMedia!");
             }
-        } else {
-            console.error("Không nhận được remote stream hoặc video element không tồn tại");
-            this.showNotification('Không thể hiển thị video từ người dùng khác', 'error');
+
+            // Lấy danh sách thiết bị
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            
+            // Kiểm tra camera
+            this.hasCamera = devices.some(device => device.kind === 'videoinput');
+            
+            // Kiểm tra microphone
+            this.hasMicrophone = devices.some(device => device.kind === 'audioinput');
+
+            // Kiểm tra microphone là bắt buộc
+            if (!this.hasMicrophone) {
+                throw new Error("Không tìm thấy microphone - Cần có microphone để thực hiện cuộc gọi");
+            }
+
+            // Chỉ thông báo không có camera
+            if (!this.hasCamera) {
+                // console.log("Không tìm thấy camera - Chỉ gửi audio");
+            }
+
+            // Kiểm tra quyền truy cập
+            await this.checkMediaPermissions();
+
+        } catch (error) {
+            // console.error("Lỗi khi kiểm tra thiết bị media:", error);
+            this.handleMediaDeviceError(error);
         }
     }
 
-    updateRemoteVideoUI(hasVideo) {
-        const remoteVideo = document.getElementById("remoteVideo");
-        const remoteWrapper = remoteVideo?.closest('.remote-video-wrapper');
-        const audioOnlyIcon = document.getElementById('remoteAudioOnlyIcon');
+    async checkMediaPermissions() {
+        try {
+            // Thử yêu cầu quyền truy cập dựa trên thiết bị có sẵn
+            const constraints = {
+                audio: true,
+                video: this.hasCamera
+            };
+            
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            stream.getTracks().forEach(track => track.stop());
+            
+            return true;
+        } catch (error) {
+            if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                throw new Error("Vui lòng cấp quyền truy cập thiết bị media");
+            }
+            throw error;
+        }
+    }
+
+    handleMediaDeviceError(error) {
+        let message = "Đã xảy ra lỗi khi kiểm tra thiết bị media.";
+        let solution = "";
+
+        switch (error.name) {
+            case 'NotAllowedError':
+            case 'PermissionDeniedError':
+                message = "Bạn đã từ chối quyền truy cập thiết bị media.";
+                solution = "Vui lòng cấp quyền trong cài đặt trình duyệt và thử lại.";
+                break;
+            case 'NotFoundError':
+                if (!this.hasMicrophone) {
+                    message = "Không tìm thấy microphone - Không thể thực hiện cuộc gọi.";
+                    solution = "Vui lòng kết nối microphone với thiết bị của bạn.";
+                } else if (!this.hasCamera) {
+                    message = "Không tìm thấy camera - Chỉ gửi audio.";
+                    solution = "Bạn vẫn có thể nhận video từ người khác.";
+                }
+                break;
+            case 'NotReadableError':
+                message = "Không thể truy cập thiết bị media.";
+                solution = "Vui lòng kiểm tra xem có ứng dụng nào khác đang sử dụng thiết bị không.";
+                break;
+            default:
+                if (!this.hasMicrophone) {
+                    message = "Không tìm thấy microphone.";
+                    solution = "Cần có microphone để thực hiện cuộc gọi.";
+                }
+        }
+
+        // Hiển thị thông báo lỗi
+        const errorDiv = document.getElementById("callError");
+        const errorMessage = document.getElementById("errorMessage");
         
-        if (remoteVideo && remoteWrapper) {
-            if (hasVideo) {
-                remoteVideo.style.display = 'block';
-                remoteVideo.style.width = '100%';
-                remoteVideo.style.height = '100%';
-                remoteVideo.style.objectFit = 'contain';
-                remoteWrapper.style.backgroundColor = '#000';
-                if (audioOnlyIcon) audioOnlyIcon.style.display = 'none';
+        if (errorDiv && errorMessage) {
+            errorMessage.innerHTML = `<strong>${message}</strong><br>${solution}`;
+            errorDiv.style.display = "block";
+
+            // Tự động ẩn thông báo sau 5 giây nếu chỉ là thông báo không có camera
+            if (this.hasMicrophone && !this.hasCamera) {
+                setTimeout(() => {
+                    errorDiv.style.display = "none";
+                }, 5000);
+            }
+        }
+
+        // Cập nhật UI cho nút gọi
+        const callButton = document.querySelector(".startCallButton");
+        if (callButton) {
+            // Chỉ vô hiệu hóa nút nếu không có microphone
+            if (!this.hasMicrophone) {
+                callButton.disabled = true;
+                callButton.title = message;
             } else {
-                remoteVideo.style.display = 'none';
-                remoteWrapper.style.backgroundColor = '#2f3136';
-                if (audioOnlyIcon) {
-                    audioOnlyIcon.style.display = 'flex';
-                    audioOnlyIcon.innerHTML = '<i class="fas fa-microphone fa-3x"></i>';
+                callButton.disabled = false;
+                callButton.title = !this.hasCamera ? "Gọi audio" : "";
+            }
+        }
+    }
+
+    setupPeerConnection() {
+        if (this.peerConnection) {
+            this.peerConnection.close();
+        }
+
+        //// console.log("Khởi tạo peer connection với cấu hình:", this.configuration);
+        this.peerConnection = new RTCPeerConnection(this.configuration);
+
+        // Xử lý ice gathering state
+        this.peerConnection.onicegatheringstatechange = () => {
+            //// console.log("ICE gathering state:", this.peerConnection.iceGatheringState);
+            if (this.peerConnection.iceGatheringState === 'complete') {
+                //// console.log("ICE gathering completed");
+                if (this.iceGatheringTimeout) {
+                    clearTimeout(this.iceGatheringTimeout);
+                }
+            }
+        };
+
+        // Xử lý connection state
+        this.peerConnection.onconnectionstatechange = () => {
+            //// console.log("Connection state:", this.peerConnection.connectionState);
+            switch (this.peerConnection.connectionState) {
+                case "connected":
+                    //// console.log("Peers connected!");
+                    this.showNotification("Kết nối thành công", "success");
+                    this.reconnectAttempts = 0;
+                    break;
+                case "disconnected":
+                    //// console.log("Peers disconnected!");
+                    this.showNotification("Kết nối bị ngắt", "warning");
+                    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                        this.tryReconnect();
+                    } else {
+                        //// console.log("Đã vượt quá số lần thử kết nối lại");
+                        this.endCall();
+                    }
+                    break;
+                case "failed":
+                    //// console.log("Peer connection failed!");
+                    this.showNotification("Kết nối thất bại", "error");
+                    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                        this.tryReconnect();
+                    } else {
+                        this.endCall();
+                    }
+                    break;
+            }
+        };
+
+        // Xử lý ice connection state
+        this.peerConnection.oniceconnectionstatechange = () => {
+            //// console.log("ICE connection state:", this.peerConnection.iceConnectionState);
+            switch (this.peerConnection.iceConnectionState) {
+                case "checking":
+                    this.showNotification("Đang thiết lập kết nối...", "info");
+                    break;
+                case "connected":
+                case "completed":
+                    //// console.log("ICE connection established");
+                    this.showNotification("Kết nối thành công", "success");
+                    break;
+                case "failed":
+                    //// console.error("ICE connection failed");
+                    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                        //// console.log(`Thử kết nối lại lần ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts}`);
+                        this.tryReconnect();
+                    } else {
+                        this.handleCallError(new Error("Không thể thiết lập kết nối sau nhiều lần thử"), "iceConnection");
+                        this.endCall();
+                    }
+                    break;
+                case "disconnected":
+                    //// console.warn("ICE connection disconnected");
+                    this.showNotification("Kết nối không ổn định", "warning");
+                    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                        this.tryReconnect();
+                    }
+                    break;
+            }
+        };
+
+        // Xử lý ice candidate errors
+        this.peerConnection.onicecandidateerror = (event) => {
+            //// console.error("ICE Candidate Error:", event);
+        };
+
+        return this.peerConnection;
+    }
+
+    async tryReconnect() {
+        this.reconnectAttempts++;
+        //// console.log(`Đang thử kết nối lại (lần ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+
+        if (this.peerConnection && this.callState === 'inCall') {
+            try {
+                const offer = await this.peerConnection.createOffer({
+                    iceRestart: true,
+                    offerToReceiveAudio: true,
+                    offerToReceiveVideo: true
+                });
+
+                await this.peerConnection.setLocalDescription(offer);
+                
+                const receiverId = document.getElementById("selectedUser").value;
+                await this.sendCallSignal(receiverId, "offer", {
+                    callId: this.currentCallId,
+                    offer: offer
+                });
+
+                //// console.log("Đã gửi offer mới để thử kết nối lại");
+            } catch (error) {
+                //// console.error("Lỗi khi thử kết nối lại:", error);
+                if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+                    this.showNotification("Không thể thiết lập lại kết nối", "error");
+                    this.endCall();
                 }
             }
         }
     }
 
-    updateRemoteAudioUI(hasAudio) {
-        const remoteAudioIndicator = document.getElementById('remoteAudioIndicator');
-        if (remoteAudioIndicator) {
-            remoteAudioIndicator.innerHTML = hasAudio ? 
-                '<i class="fas fa-volume-up"></i>' : 
-                '<i class="fas fa-volume-mute"></i>';
-        }
-    }
-
-    checkStreamConnection(stream) {
-        // Kiểm tra kết nối mỗi 5 giây
-        const checkInterval = setInterval(() => {
-            const activeTracks = stream.getTracks().filter(track => track.readyState === 'live');
-            
-            if (activeTracks.length === 0) {
-                console.log('Tất cả tracks đã ngắt kết nối');
-                this.showNotification('Kết nối với người dùng khác đã bị mất', 'error');
-                clearInterval(checkInterval);
-                this.endCall();
+    async startCall(receiverId) {
+        try {
+            if (this.callState !== 'idle') {
+                //// console.warn('Không thể bắt đầu cuộc gọi mới khi đang trong cuộc gọi khác');
                 return;
             }
 
-            console.log('Trạng thái tracks:', activeTracks.map(track => ({
-                kind: track.kind,
-                readyState: track.readyState,
-                enabled: track.enabled
-            })));
-        }, 5000);
+            const gotToken = await this.getTwilioToken();
+            if (!gotToken) {
+                throw new Error("Không thể lấy thông tin máy chủ TURN");
+            }
 
-        // Lưu interval để có thể clear khi kết thúc cuộc gọi
-        this.connectionCheckInterval = checkInterval;
+            await this.checkMediaDevices();
+
+            if (!this.hasMicrophone) {
+                throw new Error("Cần có microphone để thực hiện cuộc gọi");
+            }
+
+            this.callState = 'calling';
+            this.currentCallId = Date.now().toString();
+
+            this.showModal();
+            document.getElementById("connectionStatus").style.display = "block";
+            document.getElementById("statusMessage").textContent = "Đang khởi tạo cuộc gọi...";
+
+            this.peerConnection = this.setupPeerConnection();
+            
+            let constraints = {
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            };
+
+            if (this.hasCamera) {
+                constraints.video = {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30 }
+                };
+            }
+
+            try {
+                //// console.log("Đang lấy media stream với constraints:", constraints);
+                this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                //// console.log("Đã lấy được local stream:", this.localStream.getTracks().map(t => t.kind));
+                
+                const localVideo = document.getElementById("localVideo");
+                if (localVideo) {
+                    if (this.localStream.getVideoTracks().length > 0) {
+                        this.isAudioOnly = false;
+                        localVideo.srcObject = this.localStream;
+                        localVideo.style.display = "block";
+                        await localVideo.play();
+                        //// console.log("Local video đang phát");
+                    } else {
+                        this.isAudioOnly = true;
+                        localVideo.style.display = "none";
+                        //// console.log("Chuyển sang chế độ audio-only");
+                    }
+                }
+
+                this.localStream.getTracks().forEach(track => {
+                    //// console.log("Thêm track vào peer connection:", track.kind);
+                    this.peerConnection.addTrack(track, this.localStream);
+                });
+
+                this.peerConnection.ontrack = (event) => {
+                    //// console.log("Nhận được remote track:", event.track.kind);
+                    const remoteVideo = document.getElementById("remoteVideo");
+                    if (remoteVideo) {
+                        //// console.log("Setting remote stream");
+                        remoteVideo.srcObject = event.streams[0];
+                        this.remoteStream = event.streams[0];
+
+                        remoteVideo.onloadedmetadata = () => {
+                            //// console.log("Remote video metadata loaded");
+                            remoteVideo.play()
+                                .then(() => {
+                                    //// console.log("Remote video playing");
+                                    const hasVideoTrack = event.streams[0].getVideoTracks().length > 0;
+                                    //// console.log("Remote has video track:", hasVideoTrack);
+
+                                    if (hasVideoTrack) {
+                                        remoteVideo.style.display = "block";
+                                    } else {
+                                        remoteVideo.style.display = "none";
+                                    }
+                                })
+                                .catch(e => {/*// console.error('Lỗi khi play video remote:', e)*/});
+                        };
+                    }
+                };
+
+                //// console.log("Đang tạo offer...");
+                const offer = await this.peerConnection.createOffer({
+                    offerToReceiveAudio: true,
+                    offerToReceiveVideo: !this.isAudioOnly
+                });
+                //// console.log("Offer đã được tạo:", offer.type);
+
+                //// console.log("Đang set local description...");
+                await this.peerConnection.setLocalDescription(offer);
+                //// console.log("Local description đã được set");
+
+                //// console.log("Đang gửi offer đến người nhận...");
+                await this.sendCallSignal(receiverId, "offer", {
+                    callId: this.currentCallId,
+                    offer: offer,
+                    isAudioOnly: this.isAudioOnly
+                });
+                //// console.log("Offer đã được gửi");
+
+                document.getElementById("connectionStatus").style.display = "none";
+                document.getElementById("call-interface").style.display = "block";
+
+                this.callTimeout = setTimeout(() => {
+                    if (this.callState === 'calling') {
+                        //// console.log("Call timeout - no response from receiver");
+                        this.showNotification("Không có phản hồi từ người nhận", "warning");
+                        this.endCall();
+                    }
+                }, 30000);
+
+            } catch (mediaError) {
+                //// console.error("Lỗi khi lấy media stream:", mediaError);
+                if (!this.isAudioOnly) {
+                    //// console.log("Thử lại với audio-only mode");
+                    this.isAudioOnly = true;
+                    constraints = {
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
+                        },
+                        video: false
+                    };
+                    try {
+                        this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                        //// console.log("Đã chuyển sang audio-only mode thành công");
+                        this.showNotification("Đã chuyển sang chế độ gọi thoại", "info");
+                        const localVideo = document.getElementById("localVideo");
+                        if (localVideo) {
+                            localVideo.style.display = "none";
+                        }
+                        this.localStream.getTracks().forEach(track => {
+                            this.peerConnection.addTrack(track, this.localStream);
+                        });
+                    } catch (audioError) {
+                        //// console.error("Lỗi khi chuyển sang audio-only:", audioError);
+                        throw audioError;
+                    }
+                } else {
+                    throw mediaError;
+                }
+            }
+
+        } catch (error) {
+            //// console.error("Lỗi khi bắt đầu cuộc gọi:", error);
+            this.handleCallError(error, 'startCall');
+            this.endCall();
+        }
+    }
+
+    async handleReceiveCallSignal(senderId, signalType, signalData) {
+        try {
+            if (signalData && signalData.callId) {
+                if (signalType === "offer") {
+                    if (this.callState !== 'idle') {
+                        this.sendCallSignal(senderId, "busy", {
+                            callId: signalData.callId
+                        });
+                        return;
+                    }
+                    this.currentCallId = signalData.callId;
+                } else if (this.currentCallId && signalData.callId !== this.currentCallId) {
+                    //// console.warn('Bỏ qua tín hiệu từ cuộc gọi khác');
+                    return;
+                }
+            }
+
+            switch (signalType) {
+                case "offer":
+                    if (signalType === "offer") {
+                        const gotToken = await this.getTwilioToken();
+                        if (!gotToken) {
+                            throw new Error("Không thể lấy thông tin máy chủ TURN");
+                        }
+                    }
+                    this.callState = 'receiving';
+                    const callerName = document.querySelector(`[data-userid="${senderId}"]`)?.getAttribute("data-username") || "Unknown";
+                    document.getElementById("callerName").textContent = callerName;
+                    
+                    this.showModal();
+                    document.getElementById("incoming-call").style.display = "block";
+
+                    // Set up countdown
+                    let timeLeft = 30;
+                    this.updateCountdown(timeLeft);
+                    
+                    // Set up interval to update countdown every second
+                    this.countdownInterval = setInterval(() => {
+                        timeLeft--;
+                        this.updateCountdown(timeLeft);
+                        if (timeLeft <= 0) {
+                            clearInterval(this.countdownInterval);
+                            if (this.callState === "receiving") {
+                                this.rejectCall();
+                            }
+                        }
+                    }, 1000);
+
+                    // Set timeout to auto-reject after 30 seconds
+                    this.callTimeout = setTimeout(() => {
+                        if (this.callState === "receiving") {
+                            clearInterval(this.countdownInterval);
+                            this.rejectCall();
+                        }
+                    }, 30000);
+                    
+                    document.getElementById("acceptCallButton").onclick = async () => {
+                        // Remove timeout and interval when accepting call
+                        if (this.callTimeout) {
+                            clearTimeout(this.callTimeout);
+                            this.callTimeout = null;
+                        }
+                        if (this.countdownInterval) {
+                            clearInterval(this.countdownInterval);
+                            this.countdownInterval = null;
+                        }
+                        // Reset timeoutCounter
+                        this.updateCountdown(0);
+                        try {
+                            // Re-check device before accepting call
+                            await this.checkMediaDevices();
+
+                            // Only require microphone
+                            if (!this.hasMicrophone) {
+                                throw new Error("Cần có microphone để thực hiện cuộc gọi");
+                            }
+
+                            this.callState = 'inCall';
+
+                            // Initialize peer connection with new configuration
+                            this.peerConnection = this.setupPeerConnection();
+
+                            // Configure constraints based on available device
+                            const constraints = {
+                                audio: {
+                                    echoCancellation: true,
+                                    noiseSuppression: true,
+                                    autoGainControl: true
+                                },
+                                video: this.hasCamera ? {
+                                    width: { ideal: 1280 },
+                                    height: { ideal: 720 },
+                                    frameRate: { ideal: 30 }
+                                } : false
+                            };
+
+                            try {
+                                // Get stream from device
+                                this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+                                // Show local video if there's a camera
+                                const localVideo = document.getElementById("localVideo");
+                                if (localVideo) {
+                                    if (this.hasCamera) {
+                                        localVideo.srcObject = this.localStream;
+                                        localVideo.onloadedmetadata = () => {
+                                            localVideo.play().catch(e => console.error('Lỗi khi play video local:', e));
+                                        };
+                                        localVideo.style.display = "block";
+                                    } else {
+                                        localVideo.style.display = "none";
+                                    }
+                                }
+
+                                // Add tracks to peer connection
+                                this.localStream.getTracks().forEach(track => {
+                                    this.peerConnection.addTrack(track, this.localStream);
+                                });
+
+                            } catch (mediaError) {
+                                //// console.error("Lỗi khi lấy media stream:", mediaError);
+                                throw mediaError;
+                            }
+
+                            // Handle ice candidates
+                            this.peerConnection.onicecandidate = (event) => {
+                                if (event.candidate) {
+                                    this.sendCallSignal(senderId, "ice-candidate", {
+                                        callId: this.currentCallId,
+                                        candidate: event.candidate
+                                    });
+                                }
+                            };
+
+                            // Handle ice connection state
+                            this.peerConnection.oniceconnectionstatechange = () => {
+                                // console.log("ICE connection state:", this.peerConnection.iceConnectionState);
+                                switch (this.peerConnection.iceConnectionState) {
+                                    case "failed":
+                                        // console.error("ICE connection failed");
+                                        this.handleCallError(new Error("Kết nối ICE thất bại"), "iceConnection");
+                                        break;
+                                    case "disconnected":
+                                        // console.warn("ICE connection disconnected");
+                                        this.showNotification("Kết nối không ổn định", "warning");
+                                        break;
+                                    case "connected":
+                                        // console.log("ICE connection established");
+                                        this.showNotification("Kết nối thành công", "success");
+                                        break;
+                                }
+                            };
+
+                            // Handle remote stream
+                            this.peerConnection.ontrack = (event) => {
+                                // console.log("Nhận được remote track:", event.track.kind);
+                                const remoteVideo = document.getElementById("remoteVideo");
+                                if (remoteVideo) {
+                                    // console.log("Setting remote stream");
+                                    remoteVideo.srcObject = event.streams[0];
+                                    this.remoteStream = event.streams[0];
+
+                                    // Ensure video is played when there's metadata
+                                    remoteVideo.onloadedmetadata = () => {
+                                        // console.log("Remote video metadata loaded");
+                                        remoteVideo.play()
+                                            .then(() => {
+                                                // console.log("Remote video playing");
+                                                // Check if there's video track from caller
+                                                const hasVideoTrack = event.streams[0].getVideoTracks().length > 0;
+                                                // console.log("Remote has video track:", hasVideoTrack);
+
+                                                // Always show video if caller has sent video track
+                                                if (hasVideoTrack) {
+                                                    remoteVideo.style.display = "block";
+                                                } else {
+                                                    remoteVideo.style.display = "none";
+                                                }
+                                            })
+                                            .catch(e =>  console.error('Lỗi khi play video remote:', e));
+                                    };
+                                }
+                            };
+                            
+                            // Set remote description from received offer
+                            // console.log("Setting remote description:", signalData.offer);
+                            await this.peerConnection.setRemoteDescription(new RTCSessionDescription(signalData.offer));
+
+                            // Create and send answer
+                            // console.log("Creating answer");
+                            const answer = await this.peerConnection.createAnswer();
+                            // console.log("Setting local description:", answer);
+                            await this.peerConnection.setLocalDescription(answer);
+                            
+                            this.sendCallSignal(senderId, "answer", {
+                                callId: this.currentCallId,
+                                answer: answer
+                            });
+
+                            // Hide call interface and show call interface
+                            document.getElementById("incoming-call").style.display = "none";
+                            document.getElementById("call-interface").style.display = "block";
+
+                        } catch (error) {
+                            // console.error("Lỗi khi chấp nhận cuộc gọi:", error);
+                            this.handleCallError(error, 'acceptCall');
+                            this.endCall();
+                        }
+                    };
+
+                    document.getElementById("rejectCallButton").onclick = () => {
+                        // Remove timeout and interval when rejecting call
+                        if (this.callTimeout) {
+                            clearTimeout(this.callTimeout);
+                            this.callTimeout = null;
+                        }
+                        if (this.countdownInterval) {
+                            clearInterval(this.countdownInterval);
+                            this.countdownInterval = null;
+                        }
+                        // Reset timeoutCounter
+                        this.updateCountdown(0);
+                        this.sendCallSignal(senderId, "reject", {
+                            callId: this.currentCallId,
+                            reason: "user_rejected"
+                        });
+                        this.endCall();
+                    };
+                    break;
+
+                case "answer":
+                    if (this.callState === 'calling' && this.peerConnection) {
+                        clearTimeout(this.callTimeout);
+                        this.callState = 'inCall';
+                        // console.log("Received answer:", signalData.answer);
+                        await this.peerConnection.setRemoteDescription(new RTCSessionDescription(signalData.answer));
+                    }
+                    break;
+
+                case "ice-candidate":
+                    if (this.peerConnection && (this.callState === 'calling' || this.callState === 'inCall')) {
+                        try {
+                            // console.log("Adding ICE candidate:", signalData.candidate);
+                            await this.peerConnection.addIceCandidate(signalData.candidate);
+                        } catch (error) {
+                            // console.error("Lỗi khi thêm ice candidate:", error);
+                        }
+                    }
+                    break;
+
+                case "reject":
+                    this.showNotification("Cuộc gọi đã bị từ chối", "warning");
+                    this.endCall();
+                    break;
+
+                case "busy":
+                    this.showNotification("Người dùng đang trong cuộc gọi khác", "warning");
+                    this.endCall();
+                    break;
+
+                case "end-call":
+                    if (this.callState !== 'idle' && this.currentCallId === signalData.callId) {
+                        // console.log("Nhận được tín hiệu kết thúc cuộc gọi từ:", senderId);
+                        if (signalData.reason === "user_ended") {
+                            this.showNotification("Người kia đã kết thúc cuộc gọi", "info");
+                        }
+                        this.endCall();
+                    }
+                    break;
+            }
+        } catch (error) {
+            // console.error("Lỗi khi xử lý tín hiệu cuộc gọi:", error);
+            this.handleCallError(error, 'handleReceiveCallSignal');
+            this.endCall();
+        }
+    }
+
+    updateCountdown(seconds) {
+        const timeoutCounter = document.getElementById("timeoutCounter");
+        if (timeoutCounter) {
+            if (seconds <= 0) {
+                timeoutCounter.textContent = "";
+            } else {
+                timeoutCounter.textContent = `Tự động từ chối sau ${seconds} giây`;
+            }
+        }
+    }
+
+    endCall() {
+        try {
+            // Remove timeout and interval
+            if (this.callTimeout) {
+                clearTimeout(this.callTimeout);
+                this.callTimeout = null;
+            }
+            if (this.countdownInterval) {
+                clearInterval(this.countdownInterval);
+                this.countdownInterval = null;
+            }
+
+            // Reset timeoutCounter
+            this.updateCountdown(0);
+
+            // Remove timeout if exists
+            if (this.callTimeout) {
+                clearTimeout(this.callTimeout);
+                this.callTimeout = null;
+            }
+
+            if (this.iceGatheringTimeout) {
+                clearTimeout(this.iceGatheringTimeout);
+                this.iceGatheringTimeout = null;
+            }
+
+            // Send call end signal to other side before cleaning up
+            if (this.callState !== 'idle' && this.currentCallId) {
+                const receiverId = document.getElementById("selectedUser").value;
+                if (receiverId) {
+                    this.sendCallSignal(receiverId, "end-call", {
+                        callId: this.currentCallId,
+                        reason: "user_ended"
+                    }).catch(err => console.error("Lỗi khi gửi tín hiệu kết thúc cuộc gọi:", err));
+                }
+            }
+
+            // Stop all tracks in local stream
+            if (this.localStream) {
+                this.localStream.getTracks().forEach(track => {
+                    track.stop();
+                    //// console.log(`Đã dừng local track: ${track.kind}`);
+                });
+                this.localStream = null;
+            }
+
+            // Stop all tracks in remote stream
+            if (this.remoteStream) {
+                this.remoteStream.getTracks().forEach(track => {
+                    track.stop();
+                    //// console.log(`Đã dừng remote track: ${track.kind}`);
+                });
+                this.remoteStream = null;
+            }
+
+            // Close peer connection
+            if (this.peerConnection) {
+                this.peerConnection.close();
+                this.peerConnection = null;
+                //// console.log("Đã đóng peer connection");
+            }
+
+            // Reset video elements
+            const localVideo = document.getElementById("localVideo");
+            const remoteVideo = document.getElementById("remoteVideo");
+            
+            if (localVideo) {
+                localVideo.srcObject = null;
+                localVideo.style.display = "none";
+            }
+            
+            if (remoteVideo) {
+                remoteVideo.srcObject = null;
+                remoteVideo.style.display = "none";
+            }
+
+            // Close modal
+            this.closeModal();
+
+            // Reset state
+            this.callState = 'idle';
+            this.currentCallId = null;
+            this.isAudioOnly = false;
+            this.reconnectAttempts = 0;
+
+            //// console.log("Cuộc gọi đã kết thúc");
+            this.showNotification("Cuộc gọi đã kết thúc", "info");
+
+            // Remove countdown element if exists
+            const countdownElement = document.getElementById("call-countdown");
+            if (countdownElement) {
+                countdownElement.remove();
+            }
+
+        } catch (error) {
+            //// console.error("Lỗi khi kết thúc cuộc gọi:", error);
+        }
     }
 
     toggleMic() {
-        try {
-            // Đảo ngược trạng thái mic
-            this.isMicMuted = !this.isMicMuted;
-
-            // Cập nhật UI button
-            const toggleMicButton = document.getElementById("toggleMicButton");
-            if (toggleMicButton) {
-                toggleMicButton.innerHTML = this.isMicMuted
-                    ? '<i class="fas fa-microphone-slash"></i>'
-                    : '<i class="fas fa-microphone"></i>';
-                toggleMicButton.setAttribute('title', this.isMicMuted ? 'Bật mic' : 'Tắt mic');
-            }
-
-            // Cập nhật trạng thái mic cho tất cả audio tracks trong peer connection
-            if (this.peerConnection) {
-                const senders = this.peerConnection.getSenders();
-                const audioSenders = senders.filter(sender => sender.track && sender.track.kind === 'audio');
+        if (this.localStream) {
+            const audioTrack = this.localStream.getAudioTracks()[0];
+            if (audioTrack) {
+                audioTrack.enabled = !audioTrack.enabled;
+                const micButton = document.getElementById("toggleMicButton");
+                const micIcon = micButton.querySelector("i");
                 
-                if (audioSenders.length === 0) {
-                    console.log('Không tìm thấy audio tracks trong peer connection');
-                    this.showNotification('Không tìm thấy microphone', 'warning');
-                    return;
+                if (audioTrack.enabled) {
+                    micIcon.className = "fas fa-microphone";
+                    micButton.classList.remove("btn-danger");
+                    micButton.classList.add("btn-outline-secondary");
+                } else {
+                    micIcon.className = "fas fa-microphone-slash";
+                    micButton.classList.remove("btn-outline-secondary");
+                    micButton.classList.add("btn-danger");
                 }
-
-                audioSenders.forEach(sender => {
-                    if (sender.track) {
-                        sender.track.enabled = !this.isMicMuted;
-                    }
-                });
             }
-
-            // Cập nhật trạng thái mic cho local stream
-            const localVideo = document.getElementById("localVideo");
-            if (localVideo && localVideo.srcObject) {
-                const audioTracks = localVideo.srcObject.getAudioTracks();
-                
-                if (audioTracks.length === 0) {
-                    console.log('Không tìm thấy audio tracks trong local stream');
-                    this.showNotification('Không tìm thấy microphone', 'warning');
-                    return;
-                }
-
-                audioTracks.forEach(track => {
-                    track.enabled = !this.isMicMuted;
-                });
-            }
-
-            // Hiển thị thông báo
-            this.showNotification(
-                this.isMicMuted ? 'Đã tắt mic' : 'Đã bật mic',
-                'info'
-            );
-
-            console.log('Trạng thái mic:', this.isMicMuted ? 'Đã tắt' : 'Đã bật');
-        } catch (error) {
-            console.error('Lỗi khi thay đổi trạng thái mic:', error);
-            this.handleCallError(error, 'toggleMic');
         }
     }
 
     toggleSpeaker() {
+        const remoteVideo = document.getElementById("remoteVideo");
+        const speakerButton = document.getElementById("toggleSpeakerButton");
+        const speakerIcon = speakerButton.querySelector("i");
+
+        remoteVideo.muted = !remoteVideo.muted;
+        
+        if (remoteVideo.muted) {
+            speakerIcon.className = "fas fa-volume-mute";
+            speakerButton.classList.remove("btn-outline-secondary");
+            speakerButton.classList.add("btn-danger");
+        } else {
+            speakerIcon.className = "fas fa-volume-up";
+            speakerButton.classList.remove("btn-danger");
+            speakerButton.classList.add("btn-outline-secondary");
+        }
+    }
+
+    handleCallError(error, context) {
+        // console.error(`Lỗi trong context ${context}:`, error);
+        
+        const errorDiv = document.getElementById("callError");
+        const errorMessage = document.getElementById("errorMessage");
+        
+        // Hiển thị thông báo lỗi phù hợp
+        let message = "Đã xảy ra lỗi không xác định.";
+        
+        if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+            message = "Vui lòng cho phép truy cập camera và microphone để thực hiện cuộc gọi.";
+        } else if (error.name === "NotFoundError") {
+            message = "Không tìm thấy camera hoặc microphone trên thiết bị của bạn.";
+        } else if (error.name === "NotReadableError") {
+            message = "Không thể truy cập camera hoặc microphone. Vui lòng đảm bảo không có ứng dụng nào khác đang sử dụng chúng.";
+        }
+        
+        errorMessage.textContent = message;
+        errorDiv.style.display = "block";
+        
+        // Ẩn các phần không cần thiết
+        document.getElementById("connectionStatus").style.display = "none";
+        document.getElementById("call-interface").style.display = "none";
+        document.getElementById("incoming-call").style.display = "none";
+        
+        // Tự động đóng thông báo lỗi sau 5 giây
+        setTimeout(() => {
+            errorDiv.style.display = "none";
+            this.closeModal();
+        }, 5000);
+    }
+
+    async getTwilioToken() {
         try {
-            // Đảo ngược trạng thái loa
-            this.isSpeakerMuted = !this.isSpeakerMuted;
-
-            // Cập nhật UI button
-            const toggleSpeakerButton = document.getElementById("toggleSpeakerButton");
-            if (toggleSpeakerButton) {
-                toggleSpeakerButton.innerHTML = this.isSpeakerMuted
-                    ? '<i class="fas fa-volume-mute"></i>'
-                    : '<i class="fas fa-volume-up"></i>';
-                toggleSpeakerButton.setAttribute('title', this.isSpeakerMuted ? 'Bật loa' : 'Tắt loa');
+            const response = await fetch('/Chat/GetTwilioToken');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-
-            // Cập nhật âm thanh cho remote video
-            const remoteVideo = document.getElementById("remoteVideo");
-            if (remoteVideo) {
-                remoteVideo.muted = this.isSpeakerMuted;
-
-                // Kiểm tra xem có audio tracks không
-                if (remoteVideo.srcObject) {
-                    const audioTracks = remoteVideo.srcObject.getAudioTracks();
-                    if (audioTracks.length === 0) {
-                        console.log('Không có audio tracks trong remote stream');
-                        this.showNotification('Không có âm thanh từ người dùng khác', 'warning');
-                        return;
-                    }
-                }
-            }
-
-            // Hiển thị thông báo
-            this.showNotification(
-                this.isSpeakerMuted ? 'Đã tắt loa' : 'Đã bật loa',
-                'info'
-            );
-
-            console.log('Trạng thái loa:', this.isSpeakerMuted ? 'Đã tắt' : 'Đã bật');
+            const data = await response.json();
+            // console.log("Nhận được Twilio token:", data);
+            
+            // Cập nhật cấu hình ICE với thông tin từ Twilio
+            this.configuration = {
+                iceServers: data.iceServers,
+                iceCandidatePoolSize: 10,
+                bundlePolicy: 'max-bundle',
+                rtcpMuxPolicy: 'require',
+                iceTransportPolicy: 'all' // Cho phép tất cả các phương thức kết nối
+            };
+            
+            return true;
         } catch (error) {
-            console.error('Lỗi khi thay đổi trạng thái loa:', error);
-            this.handleCallError(error, 'toggleSpeaker');
+            // console.error("Lỗi khi lấy Twilio token:", error);
+            return false;
         }
     }
 }
-
 // Khởi tạo class khi tài liệu sẵn sàng
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize Chat
     new Chat();
 });

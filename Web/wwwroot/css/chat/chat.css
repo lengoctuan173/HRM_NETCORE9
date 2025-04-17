@@ -1,4 +1,116 @@
-﻿.video-container {
+﻿
+
+/*//Toa*/
+.video-container {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.local-video-wrapper,
+.remote-video-wrapper {
+    position: relative;
+    width: 320px;
+    height: 300px;
+    background-color: #000;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+#localVideo,
+#remoteVideo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background-color: #000;
+}
+
+.call-controls {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1rem;
+}
+
+    .call-controls button {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+#endCallButton {
+    width: auto;
+    border-radius: 24px;
+    padding: 0 2rem;
+}
+
+.incoming-call-animation {
+    animation: pulse 1.5s infinite;
+}
+
+.badge {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    z-index: 1;
+}
+
+.audio-indicator {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    z-index: 1;
+}
+
+#callModal .modal-content {
+    background-color: #fff;
+    border-radius: 12px;
+}
+
+#callModal .modal-header {
+    border-bottom: 1px solid #dee2e6;
+    padding: 1rem;
+}
+
+#callModal .modal-body {
+    padding: 1.5rem;
+}
+
+#connectionStatus,
+#callError {
+    margin-bottom: 1rem;
+}
+
+.incoming-call {
+    text-align: center;
+    padding: 2rem;
+}
+
+#callerName {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.call-timer {
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-bottom: 1rem;
+}
+.video-container {
     min-height: 300px;
     display: flex;
     justify-content: center;
@@ -248,7 +360,6 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    padding:2px;
 }
 /* Sidebar */
 .chat-sidebar-wrap {
@@ -582,14 +693,6 @@
     border-bottom: 1px solid #eee;
 }
 
-.contact:hover {
-    background-color: #f0f2f5;
-}
-
-.contact.active {
-    background-color: #e3f2fd;
-}
-
 .contact .avatar-sm {
     width: 40px;
     height: 40px;
@@ -809,3 +912,152 @@
     opacity: 1;
 }
 */
+
+/* Group Creation Modal Styles */
+.member-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    margin: 10px 0;
+}
+
+.member-item {
+    padding: 10px 15px;
+    border-bottom: 1px solid #dee2e6;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.member-item:last-child {
+    border-bottom: none;
+}
+
+.member-item:hover {
+    background-color: #f8f9fa;
+}
+
+.member-item .custom-control {
+    width: 100%;
+}
+
+.member-item .custom-control-label {
+    width: 100%;
+    cursor: pointer;
+    padding-left: 10px;
+}
+
+.member-item .avatar-wrapper {
+    position: relative;
+}
+
+.member-item .avatar-sm {
+    width: 36px;
+    height: 36px;
+    object-fit: cover;
+}
+
+.member-info h6 {
+    margin: 0;
+    font-size: 14px;
+    color: #495057;
+}
+
+/* Custom Checkbox Styles */
+.custom-control-input {
+    position: absolute;
+    left: 0;
+    z-index: -1;
+    width: 1rem;
+    height: 1rem;
+    opacity: 0;
+}
+
+.custom-control-label::before {
+    position: absolute;
+    top: 50%;
+    left: -1.5rem;
+    transform: translateY(-50%);
+    display: block;
+    width: 1rem;
+    height: 1rem;
+    pointer-events: none;
+    content: "";
+    background-color: #fff;
+    border: 1px solid #adb5bd;
+    border-radius: 0.25rem;
+}
+
+.custom-control-label::after {
+    position: absolute;
+    top: 50%;
+    left: -1.5rem;
+    transform: translateY(-50%);
+    display: block;
+    width: 1rem;
+    height: 1rem;
+    content: "";
+    background: no-repeat 50%/50% 50%;
+}
+
+.custom-control-input:checked ~ .custom-control-label::before {
+    color: #fff;
+    border-color: #0d6efd;
+    background-color: #0d6efd;
+}
+
+.custom-control-input:checked ~ .custom-control-label::after {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%23fff' d='M6.564.75l-3.59 3.612-1.538-1.55L0 4.26 2.974 7.25 8 2.193z'/%3e%3c/svg%3e");
+}
+
+/* Modal Header Styles */
+#createGroupModal .modal-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+#createGroupModal .modal-title {
+    font-size: 1.25rem;
+    color: #212529;
+}
+
+/* Group Name Input Styles */
+#groupName {
+    border-radius: 6px;
+    border: 1px solid #ced4da;
+    padding: 8px 12px;
+    margin-bottom: 15px;
+    width: 100%;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+#groupName:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    outline: none;
+}
+
+/* Modal Footer Styles */
+#createGroupModal .modal-footer {
+    border-top: 1px solid #dee2e6;
+    padding: 1rem;
+}
+
+/* Scrollbar Styles for Member List */
+.member-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.member-list::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.member-list::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 3px;
+}
+
+.member-list::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
