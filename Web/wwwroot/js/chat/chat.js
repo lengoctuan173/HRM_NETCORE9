@@ -1407,10 +1407,8 @@ class Chat {
                 const remoteVideo = document.getElementById("remoteVideo");
                 if (remoteVideo) {
                     console.log("Setting up remote stream for receiver");
-                    if (!remoteVideo.srcObject) {
-                        remoteVideo.srcObject = event.streams[0];
-                        this.remoteStream = event.streams[0];
-                    }
+                    remoteVideo.srcObject = event.streams[0];
+                    this.remoteStream = event.streams[0];
 
                     // Debug remote stream
                     const videoTracks = event.streams[0].getVideoTracks();
@@ -1418,10 +1416,16 @@ class Chat {
                     console.log("Receiver got - Video tracks:", videoTracks.length);
                     console.log("Receiver got - Audio tracks:", audioTracks.length);
 
-                    // Check if this is a video track
+                    // Hiển thị video nếu có video track
                     if (event.track.kind === 'video') {
                         console.log("Received video track, enabling video display");
                         remoteVideo.style.display = "block";
+                        
+                        // Đảm bảo video container hiển thị
+                        const videoContainer = document.getElementById("loadVideo");
+                        if (videoContainer) {
+                            videoContainer.classList.remove('d-none');
+                        }
                     }
 
                     remoteVideo.onloadedmetadata = () => {
@@ -1429,9 +1433,7 @@ class Chat {
                         remoteVideo.play()
                             .then(() => {
                                 console.log("Receiver's remote video playing");
-                                const hasVideoTrack = videoTracks.length > 0;
-                                console.log("Receiver has video track:", hasVideoTrack);
-                                remoteVideo.style.display = hasVideoTrack ? "block" : "none";
+                                remoteVideo.style.display = "block";
                             })
                             .catch(e => {
                                 console.error('Error playing remote video for receiver:', e);
@@ -1469,11 +1471,7 @@ class Chat {
                     noiseSuppression: true,
                     autoGainControl: true
                 },
-                video: this.hasCamera ? {
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                    frameRate: { ideal: 30 }
-                } : false
+                video: false // Không yêu cầu video vì không có camera
             };
 
             console.log("Receiver requesting media with constraints:", constraints);
@@ -1488,20 +1486,8 @@ class Chat {
             // Xử lý video local
             const localVideo = document.getElementById("localVideo");
             if (localVideo) {
-                if (this.hasCamera && localVideoTracks.length > 0) {
-                    console.log("Receiver setting up local video");
-                    localVideo.srcObject = this.localStream;
-                    localVideo.style.display = "block";
-                    try {
-                        await localVideo.play();
-                        console.log("Receiver local video playing");
-                    } catch (playError) {
-                        console.warn('Receiver autoplay prevented:', playError);
-                    }
-                } else {
-                    console.log("Receiver has no camera or video tracks, hiding local video");
-                    localVideo.style.display = "none";
-                }
+                console.log("Receiver has no camera or video tracks, hiding local video");
+                localVideo.style.display = "none";
             }
 
             // Add tracks to peer connection
