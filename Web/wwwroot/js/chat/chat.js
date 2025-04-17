@@ -961,41 +961,31 @@ class Chat {
             this.peerConnection.close();
         }
 
-        //// console.log("Khởi tạo peer connection với cấu hình:", this.configuration);
+        console.log("Initializing peer connection with config:", this.configuration);
         this.peerConnection = new RTCPeerConnection(this.configuration);
 
-        // Xử lý ice gathering state
-        this.peerConnection.onicegatheringstatechange = () => {
-            //// console.log("ICE gathering state:", this.peerConnection.iceGatheringState);
-            if (this.peerConnection.iceGatheringState === 'complete') {
-                //// console.log("ICE gathering completed");
-                if (this.iceGatheringTimeout) {
-                    clearTimeout(this.iceGatheringTimeout);
-                }
-            }
-        };
-
-        // Xử lý connection state
+        // Log all connection state changes
         this.peerConnection.onconnectionstatechange = () => {
-            //// console.log("Connection state:", this.peerConnection.connectionState);
+            console.log("Connection state changed to:", this.peerConnection.connectionState);
+            console.log("Current ICE Connection state:", this.peerConnection.iceConnectionState);
+            console.log("Current ICE Gathering state:", this.peerConnection.iceGatheringState);
+            console.log("Current Signaling state:", this.peerConnection.signalingState);
+
             switch (this.peerConnection.connectionState) {
                 case "connected":
-                    //// console.log("Peers connected!");
+                    console.log("✅ Peers connected successfully!");
                     this.showNotification("Kết nối thành công", "success");
                     this.reconnectAttempts = 0;
                     break;
                 case "disconnected":
-                    //// console.log("Peers disconnected!");
-                    this.showNotification("Kết nối bị ngắt", "warning");
+                    console.log("⚠️ Peers disconnected - attempting reconnect");
+                    this.showNotification("Kết nối bị ngắt - đang thử kết nối lại", "warning");
                     if (this.reconnectAttempts < this.maxReconnectAttempts) {
                         this.tryReconnect();
-                    } else {
-                        //// console.log("Đã vượt quá số lần thử kết nối lại");
-                        this.endCall();
                     }
                     break;
                 case "failed":
-                    //// console.log("Peer connection failed!");
+                    console.log("❌ Peer connection failed completely");
                     this.showNotification("Kết nối thất bại", "error");
                     if (this.reconnectAttempts < this.maxReconnectAttempts) {
                         this.tryReconnect();
@@ -1006,31 +996,65 @@ class Chat {
             }
         };
 
-        // Xử lý ice connection state
+        // Log ICE gathering state
+        this.peerConnection.onicegatheringstatechange = () => {
+            console.log("ICE gathering state changed to:", this.peerConnection.iceGatheringState);
+            
+            if (this.peerConnection.iceGatheringState === 'gathering') {
+                console.log("Starting to gather ICE candidates...");
+            }
+            
+            if (this.peerConnection.iceGatheringState === 'complete') {
+                console.log("✅ ICE gathering completed");
+                console.log("Final ICE candidates:", this._iceCandidates);
+                if (this.iceGatheringTimeout) {
+                    clearTimeout(this.iceGatheringTimeout);
+                }
+            }
+        };
+
+        // Log ICE connection state
         this.peerConnection.oniceconnectionstatechange = () => {
-            //// console.log("ICE connection state:", this.peerConnection.iceConnectionState);
+            console.log("ICE connection state changed to:", this.peerConnection.iceConnectionState);
+            
             switch (this.peerConnection.iceConnectionState) {
                 case "checking":
+                    console.log("🔄 Checking ICE connection...");
                     this.showNotification("Đang thiết lập kết nối...", "info");
                     break;
                 case "connected":
-                case "completed":
-                    //// console.log("ICE connection established");
-                    this.showNotification("Kết nối thành công", "success");
+                    console.log("✅ ICE connection established");
+                    // Đảm bảo video container và remote video hiển thị
+                    const videoContainer = document.getElementById("loadVideo");
+                    const remoteVideo = document.getElementById("remoteVideo");
+                    if (videoContainer) {
+                        videoContainer.classList.remove('d-none');
+                        console.log("Video container displayed");
+                    }
+                    if (remoteVideo && this.remoteStream) {
+                        const videoTracks = this.remoteStream.getVideoTracks();
+                        if (videoTracks.length > 0) {
+                            remoteVideo.style.display = "block";
+                            console.log("Remote video displayed - active tracks:", videoTracks.length);
+                        }
+                    }
                     break;
                 case "failed":
-                    //// console.error("ICE connection failed");
+                    console.error("❌ ICE connection failed - Details:", {
+                        iceGatheringState: this.peerConnection.iceGatheringState,
+                        signalingState: this.peerConnection.signalingState,
+                        connectionState: this.peerConnection.connectionState
+                    });
                     if (this.reconnectAttempts < this.maxReconnectAttempts) {
-                        //// console.log(`Thử kết nối lại lần ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts}`);
+                        console.log(`Attempting reconnection ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts}`);
                         this.tryReconnect();
                     } else {
-                        this.handleCallError(new Error("Không thể thiết lập kết nối sau nhiều lần thử"), "iceConnection");
+                        this.handleCallError(new Error("ICE connection failed after max attempts"), "iceConnection");
                         this.endCall();
                     }
                     break;
                 case "disconnected":
-                    //// console.warn("ICE connection disconnected");
-                    this.showNotification("Kết nối không ổn định", "warning");
+                    console.warn("⚠️ ICE connection disconnected - attempting recovery");
                     if (this.reconnectAttempts < this.maxReconnectAttempts) {
                         this.tryReconnect();
                     }
@@ -1038,9 +1062,29 @@ class Chat {
             }
         };
 
-        // Xử lý ice candidate errors
+        // Track ICE candidates
+        this._iceCandidates = [];
+        this.peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                console.log("New ICE candidate:", {
+                    type: event.candidate.type,
+                    protocol: event.candidate.protocol,
+                    address: event.candidate.address,
+                    port: event.candidate.port
+                });
+                this._iceCandidates.push(event.candidate);
+            }
+        };
+
+        // Log ICE candidate errors
         this.peerConnection.onicecandidateerror = (event) => {
-            //// console.error("ICE Candidate Error:", event);
+            console.error("ICE Candidate Error:", {
+                errorCode: event.errorCode,
+                errorText: event.errorText,
+                address: event.address,
+                port: event.port,
+                url: event.url
+            });
         };
 
         return this.peerConnection;
@@ -1778,20 +1822,23 @@ class Chat {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             const data = await response.json();
-            // console.log("Nhận được Twilio token:", data);
+            console.log("Received Twilio configuration:", {
+                iceServers: data.iceServers.length,
+                urls: data.iceServers.map(server => server.urls)
+            });
             
-            // Cập nhật cấu hình ICE với thông tin từ Twilio
             this.configuration = {
                 iceServers: data.iceServers,
                 iceCandidatePoolSize: 10,
                 bundlePolicy: 'max-bundle',
                 rtcpMuxPolicy: 'require',
-                iceTransportPolicy: 'all' // Cho phép tất cả các phương thức kết nối
+                iceTransportPolicy: 'all'
             };
             
+            console.log("WebRTC configuration set:", this.configuration);
             return true;
         } catch (error) {
-            // console.error("Lỗi khi lấy Twilio token:", error);
+            console.error("Error getting Twilio token:", error);
             return false;
         }
     }
