@@ -2160,7 +2160,7 @@ class Chat {
                     noiseSuppression: true,
                     autoGainControl: true
                 },
-                video: false // Không yêu cầu video vì không có camera
+                video: this.hasCamera // Yêu cầu video nếu có camera
             };
 
             console.log("Receiver requesting media with constraints:", constraints);
@@ -2175,8 +2175,20 @@ class Chat {
             // Xử lý video local
             const localVideo = document.getElementById("localVideo");
             if (localVideo) {
-                console.log("Receiver has no camera or video tracks, hiding local video");
-                localVideo.style.display = "none";
+                if (this.hasCamera && localVideoTracks.length > 0) {
+                    console.log("Receiver setting up local video");
+                    localVideo.srcObject = this.localStream;
+                    localVideo.style.display = "block";
+                    try {
+                        await localVideo.play();
+                        console.log("Receiver local video playing");
+                    } catch (playError) {
+                        console.warn('Receiver autoplay prevented:', playError);
+                    }
+                } else {
+                    console.log("Receiver has no camera or video tracks, hiding local video");
+                    localVideo.style.display = "none";
+                }
             }
 
             // Add tracks to peer connection
