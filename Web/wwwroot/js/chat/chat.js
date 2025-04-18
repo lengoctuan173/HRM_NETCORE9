@@ -1115,7 +1115,10 @@ class Chat {
                     } else if (!this.isAudioOnlyCall) {
                         this.endCall();
                     }
-                }, 5000);
+                    break;
+                case "closed":
+                    //// console.log("Peer connection closed!");
+                    break;
             }
         };
 
@@ -1139,17 +1142,17 @@ class Chat {
                         clearTimeout(this.iceGatheringTimeout);
                     }
                     this.reconnectAttempts = 0; // Reset reconnect attempts when connected
-                    this.showToast("Kết nối thành công");
+                    this.showNotification("Kết nối thành công", "success");
                     break;
                 case "failed":
-                    this.showToast("Kết nối thất bại", "error");
+                    this.showNotification("Kết nối thất bại", "error");
                     if (this.callState === 'inCall') {
                         console.log("Attempting to reconnect...");
                         this.tryReconnect();
                     }
                     break;
                 case "disconnected":
-                    this.showToast("Kết nối không ổn định", "warning");
+                    this.showNotification("Kết nối không ổn định", "warning");
                     // Wait longer before attempting to reconnect
                     if (this.callState === 'inCall') {
                         console.log("Connection is unstable, waiting before reconnect attempt...");
@@ -1184,7 +1187,7 @@ class Chat {
             remoteVideo.volume = 1.0;
 
             // Activate speaker button to indicate sound is on
-            const speakerButton = document.getElementById('toggleSpeaker');
+            const speakerButton = document.getElementById('toggleSpeakerButton');
             if (speakerButton) {
                 speakerButton.classList.remove('muted');
                 speakerButton.classList.add('unmuted');
@@ -1449,7 +1452,7 @@ class Chat {
     async tryReconnect() {
         if (this.reconnectAttempts >= 3) {
             console.log("Maximum reconnect attempts reached");
-            this.showToast("Không thể kết nối lại sau nhiều lần thử", "error");
+            this.showNotification("Không thể kết nối lại sau nhiều lần thử", "error");
             return;
         }
         
@@ -1476,26 +1479,11 @@ class Chat {
                         type: "reconnect-offer",
                         sdp: this.peerConnection.localDescription
                     }));
-                    this.showToast("Đang thử kết nối lại...");
+                    this.showNotification("Đang thử kết nối lại...", "info");
                 })
                 .catch(error => {
                     console.error("Error creating reconnect offer:", error);
-                    this.showToast("Lỗi khi tạo kết nối lại", "error");
-        
-        // Nếu đang là caller, tạo và gửi offer mới
-        if (this.isInitiator) {
-            this.peerConnection.createOffer()
-                .then(offer => this.peerConnection.setLocalDescription(offer))
-                .then(() => {
-                    this.signaling.invoke("SendCallSignal", this.remotePeerId, JSON.stringify({
-                        type: "reconnect-offer",
-                        sdp: this.peerConnection.localDescription
-                    }));
-                    this.showToast("Đang thử kết nối lại...");
-                })
-                .catch(error => {
-                    console.error("Error creating reconnect offer:", error);
-                    this.showToast("Lỗi khi tạo kết nối lại", "error");
+                    this.showNotification("Lỗi khi tạo kết nối lại", "error");
                 });
         }
     }
@@ -3191,8 +3179,8 @@ class Chat {
             remoteVideo.volume = 1.0; // Ensure volume is at maximum
             speakerButton.classList.remove('muted');
             speakerButton.classList.add('unmuted');
-            this.showToast("Đã bật loa");
-
+            this.showNotification("Đã bật loa", "info");
+            
             // Log the current state for debugging
             console.log("Speaker unmuted, volume set to:", remoteVideo.volume);
             if (this.remoteStream) {
@@ -3223,7 +3211,7 @@ class Chat {
             remoteVideo.muted = true;
             speakerButton.classList.remove('unmuted');
             speakerButton.classList.add('muted');
-            this.showToast("Đã tắt loa");
+            this.showNotification("Đã tắt loa", "warning");
         }
     }
 
@@ -3373,123 +3361,46 @@ class Chat {
         remoteVideo.volume = 1.0;
 
         // Update UI to show speaker is active
-        const speakerButton = document.getElementById('toggleSpeaker');
+        const speakerButton = document.getElementById('toggleSpeakerButton');
         if (speakerButton) {
             speakerButton.classList.remove('muted');
             speakerButton.classList.add('unmuted');
         }
     }
 
-    async getTwilioToken() {
-        try {
-            const response = await fetch('/Chat/GetTwilioToken');
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-            // console.log("Nhận được Twilio token:", data);
-            
-            // Cập nhật cấu hình ICE với thông tin từ Twilio
-            this.configuration = {
-                iceServers: data.iceServers,
-                iceCandidatePoolSize: 10,
-                bundlePolicy: 'max-bundle',
-                rtcpMuxPolicy: 'require',
-                iceTransportPolicy: 'all' // Cho phép tất cả các phương thức kết nối
-            };
-            
-            return true;
-        } catch (error) {
-            // console.error("Lỗi khi lấy Twilio token:", error);
-            return false;
-        }
-    }
-    
-    // Create an audio-only message element
-    createAudioOnlyMessage() {
-        // Check if it already exists
-        let audioOnlyMessage = document.getElementById("audioOnlyMessage");
-        if (audioOnlyMessage) return audioOnlyMessage;
+    // Xử lý thay đổi trạng thái kết nối
+    handleConnectionStateChange() {
+        if (!this.peerConnection) return;
         
-        // Create new element
-        audioOnlyMessage = document.createElement("div");
-        audioOnlyMessage.id = "audioOnlyMessage";
-        audioOnlyMessage.style.position = "absolute";
-        audioOnlyMessage.style.top = "0";
-        audioOnlyMessage.style.left = "0";
-        audioOnlyMessage.style.width = "100%";
-        audioOnlyMessage.style.height = "100%";
-        audioOnlyMessage.style.display = "flex";
-        audioOnlyMessage.style.flexDirection = "column";
-        audioOnlyMessage.style.alignItems = "center";
-        audioOnlyMessage.style.justifyContent = "center";
-        audioOnlyMessage.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
-        audioOnlyMessage.style.color = "white";
-        audioOnlyMessage.style.zIndex = "10";
+        console.log("Handling connection state change:", this.peerConnection.connectionState);
         
-        // Add icon
-        const icon = document.createElement("i");
-        icon.className = "fas fa-phone fa-3x";
-        icon.style.marginBottom = "15px";
-        
-        // Add text
-        const text = document.createElement("div");
-        text.textContent = "Cuộc gọi chỉ có âm thanh";
-        text.style.fontSize = "18px";
-        
-        // Add note
-        const note = document.createElement("div");
-        note.textContent = "Cuộc gọi vẫn đang diễn ra";
-        note.style.fontSize = "14px";
-        note.style.marginTop = "5px";
-        note.style.opacity = "0.8";
-        
-        // Append elements
-        audioOnlyMessage.appendChild(icon);
-        audioOnlyMessage.appendChild(text);
-        audioOnlyMessage.appendChild(note);
-        
-        // Add to remote video container
-        const remoteVideoContainer = document.querySelector(".remote-video-container");
-        if (remoteVideoContainer) {
-            remoteVideoContainer.appendChild(audioOnlyMessage);
-        }
-        
-        return audioOnlyMessage;
-    }
-
-    showAudioOnlyMessage() {
-        console.log("Showing audio-only message");
-        const videoContainer = document.getElementById('remoteVideoContainer');
-        videoContainer.style.display = 'block'; // Still show container for audio controls
-        
-        // Create or show the audio-only message
-        let audioOnlyMessage = document.getElementById('audioOnlyMessage');
-        if (!audioOnlyMessage) {
-            audioOnlyMessage = document.createElement('div');
-            audioOnlyMessage.id = 'audioOnlyMessage';
-            audioOnlyMessage.classList.add('audio-only-message');
-            audioOnlyMessage.innerHTML = `
-                <div class="audio-only-icon">
-                    <i class="fas fa-microphone"></i>
-                </div>
-                <div class="audio-only-text">Cuộc gọi chỉ có âm thanh</div>
-            `;
-            videoContainer.appendChild(audioOnlyMessage);
-        } else {
-            audioOnlyMessage.style.display = 'flex';
-        }
-        
-        // Ensure audio is playing
-        const remoteVideo = document.getElementById('remoteVideo');
-        remoteVideo.muted = false;
-        remoteVideo.volume = 1.0;
-        
-        // Update UI to show speaker is active
-        const speakerButton = document.getElementById('toggleSpeaker');
-        if (speakerButton) {
-            speakerButton.classList.remove('muted');
-            speakerButton.classList.add('unmuted');
+        switch (this.peerConnection.connectionState) {
+            case "connected":
+                console.log("Kết nối WebRTC đã được thiết lập");
+                this.showNotification("Kết nối thành công", "success");
+                break;
+                
+            case "disconnected":
+                console.log("Kết nối WebRTC đã bị ngắt");
+                // Không ngắt kết nối ngay, kiểm tra xem còn có thể phát audio hay không
+                this.checkForAudioOnlyFallback();
+                break;
+                
+            case "failed":
+                console.error("Kết nối WebRTC đã thất bại");
+                if (!this.isAudioOnlyCall) {
+                    this.showNotification("Kết nối thất bại", "error");
+                    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                        this.tryReconnect();
+                    } else {
+                        this.endCall();
+                    }
+                }
+                break;
+                
+            case "closed":
+                console.log("Kết nối WebRTC đã đóng");
+                break;
         }
     }
 }
