@@ -959,6 +959,84 @@ class Chat {
         }
     }
 
+    async getTwilioToken() {
+        try {
+            const response = await fetch('/Chat/GetTwilioToken');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            
+            // Log chi tiết về TURN servers
+            console.log("Raw Twilio configuration:", data);
+            
+            // Đảm bảo có ít nhất một TURN server
+            const hasTurnServer = data.iceServers.some(server => 
+                server.urls.some(url => url.startsWith('turn:'))
+            );
+            
+            if (!hasTurnServer) {
+                console.error("No TURN server found in configuration!");
+            }
+
+            // Thêm Google STUN server dự phòng và cấu hình TURN
+            const iceServers = data.iceServers.map(server => {
+                if (server.urls.some(url => url.startsWith('turn:'))) {
+                    return {
+                        ...server,
+                        urls: server.urls.map(url => {
+                            // Thêm các transport options cho TURN
+                            if (url.startsWith('turn:') && !url.includes('?transport=')) {
+                                return [
+                                    `${url}?transport=udp`,
+                                    `${url}?transport=tcp`
+                                ];
+                            }
+                            return url;
+                        }).flat()
+                    };
+                }
+                return server;
+            });
+
+            // Thêm public STUN servers
+            iceServers.push({
+                urls: [
+                    'stun:stun.l.google.com:19302',
+                    'stun:stun1.l.google.com:19302',
+                    'stun:stun2.l.google.com:19302'
+                ]
+            });
+
+            this.configuration = {
+                iceServers,
+                iceCandidatePoolSize: 10,
+                bundlePolicy: 'max-bundle',
+                rtcpMuxPolicy: 'require',
+                iceTransportPolicy: 'relay',
+                sdpSemantics: 'unified-plan',
+                // Thêm các cấu hình bổ sung
+                iceServers: iceServers.map(server => ({
+                    ...server,
+                    credentialType: 'password'
+                }))
+            };
+            
+            console.log("WebRTC configuration:", {
+                iceServers: this.configuration.iceServers.map(server => ({
+                    urls: server.urls,
+                    hasCreds: !!(server.username && server.credential)
+                })),
+                iceTransportPolicy: this.configuration.iceTransportPolicy
+            });
+            
+            return true;
+        } catch (error) {
+            console.error("Error getting Twilio token:", error);
+            return false;
+        }
+    }
+
     setupPeerConnection() {
         if (this.peerConnection) {
             this.peerConnection.close();
@@ -1009,7 +1087,7 @@ class Chat {
                     } else if (!this.isAudioOnlyCall) {
                         this.endCall();
                     }
-                    break;
+                }, 5000);
             }
         };
 
@@ -1048,9 +1126,10 @@ class Chat {
             }
         };
 
-        // Xử lý ice candidate errors
-        this.peerConnection.onicecandidateerror = (event) => {
-            //// console.error("ICE Candidate Error:", event);
+        // Monitor connection state changes
+        this.peerConnection.onconnectionstatechange = () => {
+            console.log("Connection state:", this.peerConnection.connectionState);
+            this.handleConnectionStateChange();
         };
 
         // Handle ontrack event
@@ -2078,11 +2157,7 @@ class Chat {
                     noiseSuppression: true,
                     autoGainControl: true
                 },
-                video: this.hasCamera ? {
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                    frameRate: { ideal: 30 }
-                } : false
+                video: false // Không yêu cầu video vì không có camera
             };
 
             console.log("Receiver requesting media with constraints:", constraints);
@@ -2097,20 +2172,8 @@ class Chat {
             // Xử lý video local
             const localVideo = document.getElementById("localVideo");
             if (localVideo) {
-                if (this.hasCamera && localVideoTracks.length > 0) {
-                    console.log("Receiver setting up local video");
-                    localVideo.srcObject = this.localStream;
-                    localVideo.style.display = "block";
-                    try {
-                        await localVideo.play();
-                        console.log("Receiver local video playing");
-                    } catch (playError) {
-                        console.warn('Receiver autoplay prevented:', playError);
-                    }
-                } else {
-                    console.log("Receiver has no camera or video tracks, hiding local video");
-                    localVideo.style.display = "none";
-                }
+                console.log("Receiver has no camera or video tracks, hiding local video");
+                localVideo.style.display = "none";
             }
 
             // Add tracks to peer connection
