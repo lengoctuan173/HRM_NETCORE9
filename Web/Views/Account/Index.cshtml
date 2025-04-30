@@ -1,0 +1,119 @@
+﻿@model Model.Models.Sycuuser
+@{
+    ViewData["Title"] = "User Profile";
+}
+@{
+    var userImage = User.FindFirst("UserImage")?.Value;
+    var imageUrl = userImage?.StartsWith("http") == true ? userImage : $"~/content/images/avatar/{userImage}";
+}
+@section Styles {
+    <link rel="stylesheet" href="~/css/account/account.css" asp-append-version="true" />
+}
+<div class="card user-profile o-hidden mb-4">
+    <div class="header-cover" style="
+                background-image: url('/content/images/photo-long-1.jpg');
+              "></div>
+    <div class="user-info">
+        <img class="profile-picture avatar-lg mb-2" src="@Url.Content(imageUrl)" alt="">
+        <p class="m-0 text-24">@Model.UserName</p>
+        <p class="text-muted m-0">@Model.StaffId</p>
+    </div>
+    <div class="card-body">
+        <ul class="nav nav-tabs profile-nav mb-4" id="profileTab" role="tablist">
+            <li class="nav-item">
+                <a class="nav-link active" id="about-tab" data-bs-toggle="tab" role="tab" aria-controls="about" aria-selected="true">@_Localizer.GetLocalizedString("About")</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="password-tab" data-bs-toggle="tab" role="tab" aria-controls="password" aria-selected="false">@_Localizer.GetLocalizedString("Password")</a>
+            </li>
+        </ul>
+        <div class="tab-content" id="profileTabContent">
+            <div class="tab-pane fade active show" id="about" role="tabpanel" aria-labelledby="about-tab">
+                <h4>@_Localizer.GetLocalizedString("PersonalInformation")</h4>
+                <hr>
+                <div class="row">
+                    <div class="col-md-6 col-12">
+                        <div class="mb-4">
+                            <p class="text-primary mb-1">
+                                <i class="i-ID-Card text-16 me-1"></i> @_Localizer.GetLocalizedString("UserID")
+                            </p>
+                            <span>@Model.UserId</span>
+                        </div>
+                        <div class="mb-4">
+                            <p class="text-primary mb-1">
+                                <i class="i-Male text-16 me-1"></i> @_Localizer.GetLocalizedString("Name")
+                            </p>
+                            <span>@Model.UserName</span>
+                        </div>
+                        <div class="mb-4">
+                            <p class="text-primary mb-1">
+                                <i class="i-Mail text-16 me-1"></i> @_Localizer.GetLocalizedString("Email")
+                            </p>
+                            <span>@(string.IsNullOrEmpty(Model.UserEmail) ? "-" : Model.UserEmail)</span>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-12">
+                        <div class="mb-4">
+                            <p class="text-primary mb-1">
+                                <i class="i-Smartphone-3 text-16 me-1"></i> @_Localizer.GetLocalizedString("Mobile")
+                            </p>
+                            <span>@(string.IsNullOrEmpty(Model.Mobile) ? "-" : Model.Mobile)</span>
+                        </div>
+                        <div class="mb-4">
+                            <p class="text-primary mb-1">
+                                <i class="i-Business-ManWoman text-16 me-1"></i> @_Localizer.GetLocalizedString("Department")
+                            </p>
+                            <span>@(string.IsNullOrEmpty(Model.Deptcode) ? "-" : Model.Deptcode)</span>
+                        </div>
+                        <div class="mb-4">
+                            <p class="text-primary mb-1">
+                                <i class="i-Clock text-16 me-1"></i> @_Localizer.GetLocalizedString("LastUpdated")
+                            </p>
+                            <span>@(Model.UpdateDt.HasValue ? Model.UpdateDt.Value.ToString("dd/MM/yyyy HH:mm") : "-")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="password" role="tabpanel" aria-labelledby="password-tab">
+                <h4>@_Localizer.GetLocalizedString("ChangePassword")</h4>
+                <hr>
+                
+                @if (TempData["SuccessMessage"] != null)
+                {
+                    <div class="alert alert-success">
+                        @TempData["SuccessMessage"]
+                    </div>
+                }
+                
+                <form asp-action="ChangePassword" asp-controller="Account" method="post">
+                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                    
+                    <div class="form-group mb-3">
+                        <label for="CurrentPassword">@_Localizer.GetLocalizedString("CurrentPassword")</label>
+                        <input type="password" class="form-control" id="CurrentPassword" name="CurrentPassword" required>
+                        <span class="text-danger" data-valmsg-for="CurrentPassword"></span>
+                    </div>
+                    
+                    <div class="form-group mb-3">
+                        <label for="NewPassword">@_Localizer.GetLocalizedString("NewPassword")</label>
+                        <input type="password" class="form-control" id="NewPassword" name="NewPassword" required>
+                        <span class="text-danger" data-valmsg-for="NewPassword"></span>
+                    </div>
+                    
+                    <div class="form-group mb-3">
+                        <label for="ConfirmPassword">@_Localizer.GetLocalizedString("ConfirmNewPassword")</label>
+                        <input type="password" class="form-control" id="ConfirmPassword" name="ConfirmPassword" required>
+                        <span class="text-danger" data-valmsg-for="ConfirmPassword"></span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary">@_Localizer.GetLocalizedString("ChangePassword")</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+@section Scripts {
+    <script src="~/scripts/account/account.js"></script>
+}

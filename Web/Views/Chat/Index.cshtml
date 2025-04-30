@@ -1,9 +1,9 @@
 ﻿@{
     ViewData["Title"] = "Chat";
 }
-<link rel="stylesheet" href="/css/chat/chat.css">
-@* <link href="/css/chat/toastr.css" rel="stylesheet" />
-<link href="/css/chat/toastr.min.css" rel="stylesheet" /> *@
+@section Styles {
+    <link rel="stylesheet" href="/css/chat/chat.css" asp-append-version="true" />
+}
 <div class="card chat-sidebar-container sidebar-container chat-design" data-sidebar-container="chat">
     <div class="chat-sidebar-wrap sidebar" data-sidebar="chat">
         <div class="border-end">
@@ -139,5 +139,7 @@
 
 @await Html.PartialAsync("_CallInterface")
 <!-- Scripts -->
-<script src="/js/chat/signalr.js"></script>
-<script src="/js/chat/chat.js"></script>
+@section Scripts {
+    <script src="/js/chat/signalr.js"></script>
+    <script src="/js/chat/chat.js"></script>
+}

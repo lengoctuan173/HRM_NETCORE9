@@ -161,5 +161,19 @@ namespace Data.Implementations
             long nextId = string.IsNullOrEmpty(maxId) ? 1 : long.Parse(maxId) + 1;
             return nextId.ToString("D10");
         }
+        public async Task<bool> UpdateUserAsync(Sycuuser user)
+        {
+            try
+            {
+                user.UpdateDt = DateTime.Now;
+                _context.Sycuusers.Update(user);
+                await _context.SaveChangesAsync();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
     }
 }
