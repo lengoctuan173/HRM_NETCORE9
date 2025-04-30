@@ -222,4 +222,10 @@
   <data name="Searchcontactsandgroups" xml:space="preserve">
     <value>Tìm kiếm liên hệ và nhóm</value>
   </data>
+  <data name="ChangePassword" xml:space="preserve">
+    <value>Đổi mật khẩu</value>
+  </data>
+  <data name="PersonalInformation" xml:space="preserve">
+    <value>Thông tin cá nhân</value>
+  </data>
 </root>

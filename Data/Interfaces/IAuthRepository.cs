@@ -17,6 +17,6 @@ namespace Data.Interfaces
         Task<Sycuuser?> RegisterUserByEmail(string email, string password);
         Task<Sycuuserauth?> RegisterUserByGoogle(string email, string name, string picture);
         Task<string> GenerateNextUserIdAsync();
-
+        Task<bool> UpdateUserAsync(Sycuuser user);
     }
 }

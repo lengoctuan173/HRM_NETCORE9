@@ -222,4 +222,10 @@
   <data name="Searchcontactsandgroups" xml:space="preserve">
     <value>Search contacts &amp; groups</value>
   </data>
+  <data name="ChangePassword" xml:space="preserve">
+    <value>Change Password</value>
+  </data>
+  <data name="PersonalInformation" xml:space="preserve">
+    <value>Personal Information</value>
+  </data>
 </root>
